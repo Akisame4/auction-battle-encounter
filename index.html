@@ -753,8 +753,8 @@ function runAutoActions() {
 async function submitBid() {
   const V = S.V; if (V?.phase !== 'bid') return;
   const max = maxBidFor(V.points[me()]);
-  const v = Number(S.bidDraft);
-  if (S.bidDraft === '' || !Number.isInteger(v) || v < 0) { S.err = '0以上の整数を入力してください'; render(); return; }
+  const v = Number(S.bidDraft || 0); // 何も積んでいなければ 0(パス)
+  if (!Number.isInteger(v) || v < 0) { S.err = '0以上の整数を入力してください'; render(); return; }
   if (v > max) { S.err = 'それ以上は入札できません'; render(); return; }
   S.err = '';
   await writeSecret(V.need.bid, v);
