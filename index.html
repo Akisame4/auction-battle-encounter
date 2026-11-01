@@ -204,11 +204,13 @@ button.chip:hover:not(:disabled){transform:translateY(-3px)} button.chip{transit
 .float{position:fixed;z-index:60;pointer-events:none;font-family:var(--num);font-size:34px;font-weight:700;text-shadow:0 2px 6px rgba(0,0,0,.8);animation:floatup 1.3s ease-out forwards}
 .float.dmg{color:#ff7a66} .float.heal{color:#8be0a8}
 @keyframes floatup{0%{transform:translate(-50%,0);opacity:0}15%{opacity:1}100%{transform:translate(-50%,-60px);opacity:0}}
+.sefab{position:fixed;right:14px;bottom:14px;z-index:40;background:rgba(10,20,14,.85);font-size:12px;padding:7px 14px}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1a140a;border:1px solid var(--gold2);padding:10px 16px;border-radius:12px;z-index:70;max-width:90vw}
 </style>
 </head>
 <body>
 <div class="wrap" id="app"></div>
+<button id="muteBtn" class="ghost sefab" type="button">🔊 音あり</button>
 
 <script type="module">
 // =====================================================================
@@ -705,6 +707,7 @@ function onGameData() {
   S.V = derive(S.pub, rev);
   if (S.V.phase !== 'pick') S.pickSel = null;
   if (S.V.need?.bid !== S.bidKey) { S.bidKey = S.V.need?.bid; S.bidDraft = ''; S.err = ''; }
+  soundWatch(S.V);
   runAutoActions();
   render();
 }
@@ -757,6 +760,7 @@ async function submitBid() {
   if (!Number.isInteger(v) || v < 0) { S.err = '0以上の整数を入力してください'; render(); return; }
   if (v > max) { S.err = 'それ以上は入札できません'; render(); return; }
   S.err = '';
+  play('bet');
   await writeSecret(V.need.bid, v);
   S.bidDraft = '';
   render();
@@ -829,17 +833,23 @@ async function playTurn(t) {
     if (st.kind === 'roll') {
       PB.cube = { face: st.face, role: T.role, spin: true };
       PB.hl = { role: T.role, face: st.face };
+      play('roll', { rate: 0.95 + Math.random() * 0.1 });
       render(); await sleep(ROLL_ANIM_MS);
     }
     const prev = PB.snap || { host: { life: S.V.points.host }, guest: { life: S.V.points.guest } };
     pushLog(T, st); PB.snap = st.snap; render();
     floatDelta(prev, st.snap);
+    stepSound(prev, st);
     await sleep(STEP_GAP_MS);
   }
   if (PB.key !== key) return;
   PB.shown = t + 1; PB.busy = false;
   S.writing.delete('roll' + t);
   render();
+  if (PB.shown >= S.V.battle.turns.length) {
+    const w = S.V.battle.result.winner;
+    setTimeout(() => play(w === me() ? 'win' : 'lose'), 300);
+  } else if (PB.shown >= S.V.rolled && S.V.battle.turns[PB.shown].role === me() && !S.autoRoll) play('turn', { gain: 0.6 });
   syncPlayback();
   scheduleAutoRoll();
 }
@@ -849,6 +859,59 @@ function scheduleAutoRoll() {
   const V = S.V;
   if (!S.autoRoll || V?.phase !== 'battle' || V.need.by !== me()) return;
   autoRollTimer = setTimeout(() => pressRoll(), AUTO_ROLL_DELAY_MS);
+}
+
+// ---------------- 効果音 ----------------
+// se/*.wav は tools/se_synth.py で合成したもの。ブラウザの自動再生制限があるので、最初の操作で読み込む
+const SE_NAMES = ['chip', 'bet', 'reveal', 'lot', 'write', 'roll', 'hit', 'heal', 'barrier', 'turn', 'win', 'lose'];
+const MUTE_KEY = 'diceauction_mute_v1';
+const SE = { ctx: null, buf: {}, muted: lsGet(MUTE_KEY) === '1' };
+function seUnlock() {
+  if (SE.ctx) { if (SE.ctx.state === 'suspended') SE.ctx.resume(); return; }
+  try { SE.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }
+  for (const n of SE_NAMES) {
+    fetch(`se/${n}.wav`).then(r => r.arrayBuffer()).then(b => SE.ctx.decodeAudioData(b)).then(buf => { SE.buf[n] = buf; }).catch(() => {});
+  }
+}
+function play(name, { rate = 1, gain = 1 } = {}) {
+  if (SE.muted || !SE.ctx || !SE.buf[name] || document.hidden) return;
+  const src = SE.ctx.createBufferSource(), g = SE.ctx.createGain();
+  src.buffer = SE.buf[name]; src.playbackRate.value = rate; g.gain.value = gain * 0.8;
+  src.connect(g).connect(SE.ctx.destination); src.start();
+}
+document.addEventListener('pointerdown', seUnlock, true);
+document.addEventListener('keydown', seUnlock, true);
+function renderMute() {
+  const b = document.getElementById('muteBtn');
+  if (b) { b.textContent = SE.muted ? '🔇 音なし' : '🔊 音あり'; b.setAttribute('aria-pressed', String(SE.muted)); }
+}
+// 状態の変化を見て鳴らす(途中から入ったときは、過去の出来事では鳴らさない)
+const SW = { key: null };
+function soundWatch(V) {
+  const key = `${S.code}/${S.g}`;
+  const oppFlag = V.need?.bid ? !!S.pub?.flag?.[V.need.bid]?.[op()] : false;
+  const now = { key, phase: V.phase, bid: V.need?.bid, hist: V.history.length, auto: V.auto.length, oppFlag };
+  // 伏せ値の読み込み待ちがある間は判定を保留する(再読み込み後の追いかけ中に鳴らさないため)
+  if (Object.entries(S.pub?.flag || {}).some(([k, f]) => f.host && f.guest && !S.sec[k])) return;
+  const p = { ...SW };
+  Object.assign(SW, now);
+  if (p.key !== key) return;
+  if (V.phase === 'bid' && p.bid === V.need.bid && oppFlag && !p.oppFlag) play('chip', { gain: 0.5, rate: 0.9 });
+  if (p.phase === 'bid' && V.phase === 'bid' && p.bid !== V.need.bid && V.need.attempt === 1) play('reveal');
+  if (p.phase !== 'pick' && V.phase === 'pick') {
+    if (p.phase === 'bid') play('reveal');
+    if (V.need.by === me()) setTimeout(() => play('lot'), p.phase === 'bid' ? 380 : 0);
+  }
+  if (V.history.length > p.hist || V.auto.length > p.auto) play('write');
+  if (p.phase !== 'battle' && V.phase === 'battle' && V.need.by === me() && V.rolled === 0) setTimeout(() => play('turn', { gain: 0.6 }), 400);
+}
+function stepSound(prev, st) {
+  if (st.lines.some(l => l.includes('バリアが'))) play('barrier', { gain: 0.7 });
+  for (const r of ['host', 'guest']) {
+    const d = st.snap[r].life - prev[r].life;
+    if (d < 0) play('hit', { gain: r === me() ? 1 : 0.75 });
+    else if (d > 0) play('heal', { gain: 0.7 });
+  }
 }
 
 // =====================================================================
@@ -1276,6 +1339,7 @@ $app.addEventListener('click', e => {
     const d = Number(q);
     if (cur + d > max) { S.err = 'それ以上は入札できません'; render(); return; }
     flyChip(t, d);
+    play('chip', { rate: 0.92 + Math.random() * 0.16 });
     S.bidDraft = String(cur + d); S.err = ''; render();
   }
   else if (act === 'chipreset') { S.bidDraft = ''; S.err = ''; render(); }
@@ -1303,6 +1367,11 @@ $app.addEventListener('keydown', e => {
   if (e.target.id === 'codeInput') joinRoom(e.target.value.trim());
 });
 
+document.getElementById('muteBtn').addEventListener('click', () => {
+  SE.muted = !SE.muted; lsSet(MUTE_KEY, SE.muted ? '1' : null); renderMute();
+  if (!SE.muted) { seUnlock(); setTimeout(() => play('chip'), 60); }
+});
+renderMute();
 render();
 boot();
 </script>
