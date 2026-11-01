@@ -1,0 +1,1135 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ダイスオークション(仮)</title>
+<meta name="description" content="能力を競り落としてダイスに書き込み、完成したダイスで戦う2人対戦のブラウザゲーム">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='6' width='52' height='52' rx='12' fill='%23f2c14e'/%3E%3Ccircle cx='20' cy='20' r='5' fill='%23141824'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23141824'/%3E%3Ccircle cx='44' cy='44' r='5' fill='%23141824'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#141824; --bg2:#1c2232; --card:#232a3d; --card2:#2b3349; --line:#3a4460;
+  --text:#e8ecf5; --sub:#9aa6c2; --gold:#f2c14e; --gold2:#b8902f;
+  --me:#4fa3ff; --op:#ff6b6b; --ok:#5ad19a; --warn:#ffb347;
+  --c-atk:#e05a5a; --c-sp:#3fbf9a; --c-minus:#8a73c9; --c-face:#e0a83a; --c-unk:#5b6683;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:"M PLUS Rounded 1c",system-ui,sans-serif;font-size:15px}
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;border-radius:10px;padding:10px 16px;background:var(--card2);color:var(--text);font-weight:700}
+button:hover:not(:disabled){filter:brightness(1.15)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--gold);color:#2a1f05}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--sub)}
+input,select{font-family:inherit;font-size:inherit;background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.wrap{max-width:1180px;margin:0 auto;padding:12px 16px 40px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+header h1{font-size:20px;margin:0;font-weight:800;letter-spacing:.04em}
+header h1 span{color:var(--gold)}
+.chip{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--card);color:var(--sub);border:1px solid var(--line)}
+.chip.warn{color:var(--warn);border-color:var(--warn)}
+.spacer{flex:1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.muted{color:var(--sub)}
+.center{text-align:center}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.err{color:var(--op);font-weight:700;min-height:1.4em}
+
+/* lobby */
+.lobby{max-width:520px;margin:30px auto;display:grid;gap:14px}
+.lobby h2{margin:0 0 6px;font-size:16px}
+.lobby .big{font-size:30px;text-align:center;font-weight:800;margin:10px 0 0}
+.code{font-size:40px;font-weight:800;letter-spacing:.2em;color:var(--gold);text-align:center}
+.rules-text{font-size:13px;line-height:1.7;color:var(--sub)}
+.rules-text b{color:var(--text)}
+
+/* life bar */
+.lifebar{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:stretch;margin-bottom:12px}
+.plate{background:var(--card);border-radius:14px;padding:10px 14px;border:2px solid var(--line);display:flex;align-items:center;gap:12px}
+.plate.me{border-color:var(--me)} .plate.op{border-color:var(--op);flex-direction:row-reverse;text-align:right}
+.plate .who{font-size:13px;color:var(--sub)}
+.plate .nm{font-weight:800;font-size:15px}
+.plate .life{font-size:34px;font-weight:800;line-height:1;min-width:2.2em;text-align:center}
+.plate.me .life{color:var(--me)} .plate.op .life{color:var(--op)}
+.plate .lbl{font-size:11px;color:var(--sub)}
+.plate .st{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.plate.op .st{justify-content:flex-end}
+.st span{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--bg2);border:1px solid var(--line)}
+.plate.turn{box-shadow:0 0 0 3px rgba(242,193,78,.35)}
+.plate .off{color:var(--warn);font-size:11px}
+.vs{display:flex;align-items:center;justify-content:center;color:var(--sub);font-weight:800}
+.lifebar .delta{font-size:14px;font-weight:800;margin-left:4px}
+
+/* layout */
+.grid{display:grid;grid-template-columns:300px 1fr;gap:12px}
+.mainp{display:grid;gap:12px;align-content:start}
+@media (max-width:860px){ .grid{grid-template-columns:1fr} .grid .listp{order:3} }
+@media (max-width:560px){
+  .lifebar{grid-template-columns:1fr 1fr} .vs{display:none}
+  .plate{padding:8px 10px;gap:8px} .plate .life{font-size:26px}
+}
+
+/* ability list */
+.listp h3,.mainp h3{margin:0 0 8px;font-size:14px;color:var(--sub);font-weight:700}
+.ab{display:grid;grid-template-columns:6px 1fr auto;gap:8px;align-items:center;padding:7px 8px;border-radius:10px;background:var(--bg2);margin-bottom:6px;border:1px solid transparent}
+.ab .bar{align-self:stretch;border-radius:4px}
+.ab .n{font-weight:800}
+.ab .d{font-size:12px;color:var(--sub);line-height:1.4}
+.ab .s{font-size:11px;color:var(--sub);text-align:right;white-space:nowrap}
+.ab.sold{opacity:.55}
+.ab.now{border-color:var(--gold);background:#2d2a20;opacity:1}
+.ab .s b.me{color:var(--me)} .ab .s b.op{color:var(--op)}
+.cat-攻撃{background:var(--c-atk)} .cat-回復・特殊{background:var(--c-sp)} .cat-マイナス{background:var(--c-minus)} .cat-面指定{background:var(--c-face)} .cat-unk{background:var(--c-unk)}
+
+/* auction */
+.stage{display:grid;gap:12px}
+.lot{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.lot .tag{font-size:12px;color:var(--gold);font-weight:800;letter-spacing:.1em}
+.lot .name{font-size:28px;font-weight:800}
+.lot .eff{font-size:15px;margin-top:4px}
+.lot .catb{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;color:#111;font-weight:800;margin-right:6px}
+.bidbox{display:grid;gap:10px}
+.bidrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.bidrow input{width:110px;font-size:26px;font-weight:800;text-align:center;padding:6px}
+.bidrow .q{padding:8px 11px;font-size:13px}
+.banner{padding:10px 14px;border-radius:12px;background:var(--bg2);border:1px solid var(--line);line-height:1.6}
+.banner.gold{border-color:var(--gold);background:#2d2a20}
+.banner.tie{border-color:var(--warn);background:#33281a}
+.wait{display:flex;align-items:center;gap:10px;color:var(--sub);font-weight:700}
+.dots::after{content:"";animation:dots 1.4s infinite steps(4)}
+@keyframes dots{0%{content:""}25%{content:"・"}50%{content:"・・"}75%{content:"・・・"}}
+.res{font-size:14px} .res b.me{color:var(--me)} .res b.op{color:var(--op)}
+
+/* dice nets */
+.dicep{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:640px){ .dicep{grid-template-columns:1fr} }
+.die h4{margin:0 0 8px;font-size:14px} .die.me h4{color:var(--me)} .die.op h4{color:var(--op)}
+.faces{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.face{position:relative;min-height:74px;border-radius:10px;background:var(--bg2);border:2px solid var(--line);padding:6px 6px 6px 26px;display:flex;flex-direction:column;justify-content:center}
+.face .num{position:absolute;left:6px;top:5px;width:18px;height:18px;border-radius:5px;background:#e9edf6;color:#1b2030;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.face .fn{font-weight:800;font-size:13px;line-height:1.25}
+.face .fe{font-size:10.5px;color:var(--sub);line-height:1.3;margin-top:2px}
+.face.empty{border-style:dashed;color:var(--sub);font-size:12px}
+.face .stripe{position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:8px 0 0 8px}
+.face .honryo{font-size:10px;color:var(--gold);font-weight:800}
+.face.can{cursor:pointer;border-color:var(--gold2)}
+.face.can:hover{background:#2d2a20}
+.face.picked{border-color:var(--gold);background:#3a3420;box-shadow:0 0 0 3px rgba(242,193,78,.3)}
+.face.flash{animation:flash 1s ease-out 2}
+@keyframes flash{0%{box-shadow:0 0 0 4px var(--gold)}100%{box-shadow:0 0 0 0 transparent}}
+.face.hit{border-color:var(--gold);box-shadow:0 0 0 3px rgba(242,193,78,.45)}
+
+/* battle */
+.arena{display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:center}
+@media (max-width:560px){ .arena{grid-template-columns:1fr} }
+.scene{width:180px;height:180px;perspective:600px;margin:0 auto}
+.cube{width:120px;height:120px;position:relative;margin:30px;transform-style:preserve-3d;transition:transform var(--rollms,900ms) cubic-bezier(.2,.8,.25,1)}
+.cube .cf{position:absolute;width:120px;height:120px;border-radius:16px;background:#f4f1e8;color:#1b2030;border:2px solid #cfc7b0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;backface-visibility:hidden}
+.cube .cf .cn{font-size:30px;font-weight:800;line-height:1}
+.cube .cf .ct{font-size:13px;font-weight:800;margin-top:6px;line-height:1.2}
+.cube.me .cf{border-color:var(--me)} .cube.op .cf{border-color:var(--op)}
+.cf1{transform:rotateY(0deg) translateZ(60px)} .cf6{transform:rotateY(180deg) translateZ(60px)}
+.cf2{transform:rotateY(90deg) translateZ(60px)} .cf5{transform:rotateY(-90deg) translateZ(60px)}
+.cf3{transform:rotateX(90deg) translateZ(60px)} .cf4{transform:rotateX(-90deg) translateZ(60px)}
+.turnline{font-size:14px;color:var(--sub)} .turnline b{color:var(--text)}
+.log{max-height:300px;overflow:auto;display:grid;gap:6px;font-size:13px}
+.log .le{padding:7px 10px;border-radius:10px;background:var(--bg2);border-left:4px solid var(--line);line-height:1.5}
+.log .le.me{border-left-color:var(--me)} .log .le.op{border-left-color:var(--op)}
+.log .le .h{font-weight:800}
+.result{font-size:40px;font-weight:800;text-align:center;margin:6px 0}
+.result.win{color:var(--gold)} .result.lose{color:var(--op)} .result.draw{color:var(--sub)}
+.toggle{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);cursor:pointer}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--card2);border:1px solid var(--line);padding:10px 16px;border-radius:12px;z-index:10;max-width:90vw}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script type="module">
+// =====================================================================
+// 調整値(数値はすべて仮。バランス調整はここと能力定義テーブルで行う)
+// =====================================================================
+const START_POINTS = 100;      // 初期ポイント
+const BID_MAX = 99;            // 入札の上限
+const ABILITY_COUNT = 12;      // 1ゲームで競りに出す能力の数
+const FACES = 6;               // ダイスの面数
+const TURN_LIMIT = 50;         // [仮] このターン数で決着しなければ残りライフが多い方の勝ち(1ターン=両者が1回ずつ振る)
+const CHAIN_MAX = 3;           // [仮] 連続行動で追加で振れる回数の上限(1ターン内)
+const SHOW_TIE_AMOUNT = true;  // [仮] 同額だったとき、再入札の前にその金額を見せる
+const ROLL_ANIM_MS = 900;      // ダイスが転がる演出の長さ
+const STEP_GAP_MS = 500;       // 演出の各ステップのあいだの待ち時間
+const AUTO_ROLL_DELAY_MS = 700;
+
+// Firebase の設定(UCが作成したプロジェクトの値を入れる)
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD-ApdfUNONr9apE1um0XrMZ0tpOZY8wYY",
+  authDomain: "dice-auction-244c3.firebaseapp.com",
+  databaseURL: "https://dice-auction-244c3-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "dice-auction-244c3",
+  appId: "1:481427855866:web:8427c103846981db822c43",
+};
+const ROOM_CLEANUP_MS = 12 * 3600 * 1000; // この時間より前に作られた部屋は掃除する(database.rules.json と同じ値)
+
+// =====================================================================
+// LOGIC START — ここから LOGIC END までは DOM・Firebase に依存しない純粋なロジック
+// =====================================================================
+
+// ---------------- 能力定義テーブル ----------------
+// fx: 効果の中身(op と数値)。face が数字の能力は、その面に書いたときだけ fx、ほかの面では fxOther。
+// 説明文は fx から自動で作るので、数値だけ書き換えれば表示も変わる。
+const POOLS = {
+  gachi: [
+    { id: 'kyoda',    cat: '攻撃', name: '強打',       face: null, fx: [{ op: 'dmg', n: 8 }] },
+    { id: 'konshin',  cat: '攻撃', name: '渾身の一撃', face: null, fx: [{ op: 'dmg', n: 12 }] },
+    { id: 'dokubari', cat: '攻撃', name: '毒針',       face: null, fx: [{ op: 'poison', n: 2, ticks: 3 }] },
+    { id: 'bakuchi',  cat: '攻撃', name: '博打パンチ', face: null, fx: [{ op: 'gamble', n: 10, p: 0.5 }] },
+    { id: 'michizure',cat: '攻撃', name: '道連れ',     face: null, fx: [{ op: 'both', n: 6 }] },
+    { id: 'kyushu',   cat: '攻撃', name: 'ライフ吸収', face: null, fx: [{ op: 'drain', n: 4, heal: 4 }] },
+    { id: 'oiuchi',   cat: '攻撃', name: '追い打ち',   face: null, fx: [{ op: 'chase', hi: 10, lo: 3 }] },
+    { id: 'kaifuku',  cat: '回復・特殊', name: '回復',     face: null, fx: [{ op: 'heal', n: 5 }] },
+    { id: 'daikaifuku',cat:'回復・特殊', name: '大回復',   face: null, fx: [{ op: 'heal', n: 9 }] },
+    { id: 'barrier',  cat: '回復・特殊', name: 'バリア',   face: null, fx: [{ op: 'barrier', n: 1 }] },
+    { id: 'renzoku',  cat: '回復・特殊', name: '連続行動', face: null, fx: [{ op: 'chain' }] },
+    { id: 'copy',     cat: '回復・特殊', name: 'コピー',   face: null, fx: [{ op: 'copy' }] },
+    { id: 'fuin',     cat: '回復・特殊', name: '封印',     face: null, fx: [{ op: 'seal' }] },
+    { id: 'jisho',    cat: 'マイナス', name: '自傷',   face: null, fx: [{ op: 'selfdmg', n: 5 }] },
+    { id: 'karaburi', cat: 'マイナス', name: '空振り', face: null, fx: [{ op: 'none' }] },
+    { id: 'tento',    cat: 'マイナス', name: '転倒',   face: null, fx: [{ op: 'trip' }] },
+    { id: 'boso',     cat: 'マイナス', name: '暴走',   face: null, fx: [{ op: 'rampage', n: 3, heal: 3 }] },
+    { id: 'ichigeki', cat: '面指定', name: '一撃必殺',     face: 1, fx: [{ op: 'dmg', n: 15 }], fxOther: [{ op: 'dmg', n: 2 }] },
+    { id: 'twin',     cat: '面指定', name: 'ツインエッジ', face: 2, fx: [{ op: 'dmg', n: 6, hits: 2 }], fxOther: [{ op: 'dmg', n: 3 }] },
+    { id: 'triple',   cat: '面指定', name: 'トリプルスリー', face: 3, fx: [{ op: 'dmg', n: 3, hits: 3 }], fxOther: [{ op: 'dmg', n: 3 }] },
+    { id: 'senkoku',  cat: '面指定', name: '死の宣告',     face: 4, fx: [{ op: 'doom', n: 20, delay: 4 }], fxOther: [{ op: 'dmg', n: 4 }] },
+    { id: 'gogyo',    cat: '面指定', name: '五行の守り',   face: 5, fx: [{ op: 'barrier', n: 2 }, { op: 'heal', n: 5 }], fxOther: [{ op: 'heal', n: 5 }] },
+    { id: 'kaishin',  cat: '面指定', name: '会心の一撃',   face: 6, fx: [{ op: 'dmg', n: 14, pierce: true }], fxOther: [{ op: 'dmg', n: 4 }] },
+  ],
+  fuzake: null, // ふざけ版は未作成(UCが用意する)。用意されるまではガチ版のプールで代用する [仮]
+};
+
+const MODES = {
+  gachi:  { label: '開示あり(ガチ版)',   reveal: true,  pool: 'gachi' },
+  fuzake: { label: '開示なし(ふざけ版)', reveal: false, pool: 'fuzake' },
+};
+
+function getPool(mode) {
+  return POOLS[MODES[mode].pool] || POOLS.gachi;
+}
+const ABIL = {};
+for (const k in POOLS) for (const a of POOLS[k] || []) ABIL[a.id] = a;
+
+const FX_TEXT = {
+  dmg: f => (f.hits > 1 ? `${f.n}ダメージを${f.hits}回` : `${f.n}ダメージ`) + (f.pierce ? '、バリア貫通' : ''),
+  heal: f => `自分が${f.n}回復`,
+  poison: f => `相手に毎ターン${f.n}ダメージ、${f.ticks}ターン`,
+  gamble: f => `${f.n}ダメージ、コインが裏なら外れ`,
+  both: f => `自分も相手も${f.n}ダメージ`,
+  drain: f => `${f.n}ダメージ、自分も${f.heal}回復`,
+  chase: f => `相手ライフ半分以下なら${f.hi}、それ以外は${f.lo}ダメージ`,
+  barrier: f => f.n > 1 ? `バリアを${f.n}回分張る` : '次に受けるダメージを1回だけ0にする',
+  chain: () => '出たらもう一度振れる',
+  copy: () => '相手が直前に出した面の効果を使う',
+  seal: () => '相手の次の出目を無効にする',
+  selfdmg: f => `自分が${f.n}ダメージ`,
+  none: () => '何も起きない',
+  trip: () => '自分の次の出目が無効になる',
+  rampage: f => `自分が${f.n}ダメージ、相手が${f.heal}回復`,
+  doom: f => `${f.delay}ターン後に相手へ${f.n}ダメージ`,
+};
+const fxText = fx => fx.map(f => FX_TEXT[f.op](f)).join('、');
+// 能力の説明(一覧用)
+function abilDesc(a) {
+  if (!a.face) return fxText(a.fx);
+  return `${a.face}の面: ${fxText(a.fx)} / ほかの面: ${fxText(a.fxOther)}`;
+}
+// その面に書かれたときの効果
+function fxFor(a, face) { return a.face && face !== a.face ? a.fxOther : a.fx; }
+function faceDesc(a, face) { return fxText(fxFor(a, face)); }
+
+// ---------------- 乱数 ----------------
+function hash32(str) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  return h1 >>> 0;
+}
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// 両者が伏せて出した乱数を混ぜて、どちらにも事前に読めない乱数列を作る
+function rngFrom(key, pair) { return mulberry32(hash32(`${key}|${pair.host}|${pair.guest}`)); }
+function shuffle(arr, rng) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+const other = r => (r === 'host' ? 'guest' : 'host');
+const R = r => `{${r}}`; // ログ中の名前の差し込み位置
+const isFull = d => d.every(x => x);
+const maxBidFor = pts => Math.max(0, Math.min(BID_MAX, pts - 1)); // 所持ポイントは必ず1残す
+function clampBid(v, pts) {
+  v = Math.floor(Number(v));
+  if (!Number.isFinite(v) || v < 0) v = 0;
+  return Math.min(v, maxBidFor(pts));
+}
+
+// ---------------- ゲーム進行の導出 ----------------
+// pub: 公開データ(start, flag, pick, roll, rematch)
+// rev(key): 両者の伏せ値がそろって公開されたもの {host, guest}、まだなら null
+// 状態は保存せず、毎回この2つから先頭から組み立て直す(両クライアントで必ず同じ結果になる)
+function derive(pub, rev) {
+  const mode = pub.start.mode;
+  const pool = getPool(mode);
+  const V = {
+    mode, reveal: MODES[mode].reveal,
+    points: { host: START_POINTS, guest: START_POINTS },
+    dice: { host: Array(FACES).fill(null), guest: Array(FACES).fill(null) },
+    list: [], sold: {}, history: [], cur: null, auto: [], phase: null, need: null,
+  };
+  const draw = rev('draw');
+  if (!draw) { V.phase = 'prepare'; V.need = { nonce: 'draw' }; return V; }
+  const drawn = shuffle(pool.map(a => a.id), rngFrom('draw', draw)).slice(0, ABILITY_COUNT);
+  const order = pool.map(a => a.id);
+  V.list = drawn.sort((a, b) => order.indexOf(a) - order.indexOf(b)); // 一覧は定義順(競り順は伏せる)
+  const remaining = [...V.list];
+
+  for (let n = 1; ; n++) {
+    if (isFull(V.dice.host) || isFull(V.dice.guest) || remaining.length === 0) break;
+    const r = rev('r' + n);
+    if (!r) { V.phase = 'prepare'; V.round = n; V.need = { nonce: 'r' + n }; return V; }
+    const item = remaining[Math.floor(rngFrom('r' + n, r)() * remaining.length)];
+    const cur = V.cur = { n, item, bids: [], winner: null, price: 0, random: false };
+    V.round = n;
+    for (let a = 0; a < 2 && !cur.winner; a++) {
+      const key = `b${n}_${a}`;
+      const b = rev(key);
+      if (!b) { V.phase = 'bid'; V.need = { bid: key, attempt: a }; return V; }
+      const h = clampBid(b.host, V.points.host), g = clampBid(b.guest, V.points.guest);
+      cur.bids.push({ host: h, guest: g });
+      if (h !== g) { cur.winner = h > g ? 'host' : 'guest'; cur.price = Math.max(h, g); }
+    }
+    if (!cur.winner) {
+      const t = rev('t' + n);
+      if (!t) { V.phase = 'prepare'; V.need = { nonce: 't' + n }; return V; }
+      cur.winner = rngFrom('t' + n, t)() < 0.5 ? 'host' : 'guest';
+      cur.price = cur.bids[1].host;
+      cur.random = true;
+    }
+    V.points[cur.winner] -= cur.price;
+    const p = pub.pick?.[n]?.[cur.winner];
+    const target = p && (p.side === 'self' ? cur.winner : other(cur.winner));
+    if (!p || !Number.isInteger(p.face) || p.face < 1 || p.face > FACES || V.dice[target][p.face - 1]) {
+      V.phase = 'pick'; V.need = { pick: n, by: cur.winner }; return V;
+    }
+    V.dice[target][p.face - 1] = item;
+    remaining.splice(remaining.indexOf(item), 1);
+    const h = { ...cur, target, face: p.face };
+    V.history.push(h); V.sold[item] = h; V.cur = null;
+  }
+
+  // どちらかのダイスが埋まった → 残りは空きのあるダイスに自動で書き込む
+  if (remaining.length) {
+    const a = rev('auto');
+    if (!a) { V.phase = 'prepare'; V.need = { nonce: 'auto' }; return V; }
+    const rng = rngFrom('auto', a);
+    for (const item of shuffle(remaining, rng)) {
+      const target = isFull(V.dice.host) ? 'guest' : 'host';
+      const empties = V.dice[target].map((x, i) => (x ? -1 : i)).filter(i => i >= 0);
+      const fi = empties[Math.floor(rng() * empties.length)];
+      V.dice[target][fi] = item;
+      const h = { item, auto: true, target, face: fi + 1 };
+      V.auto.push(h); V.sold[item] = h;
+    }
+  }
+
+  const bt = rev('battle');
+  if (!bt) { V.phase = 'prepare'; V.need = { nonce: 'battle' }; return V; }
+  V.battle = simulate(V.dice, V.points, rngFrom('battle', bt));
+  // 振った回数(ターン順に連続して押されている分だけ数える)
+  let rolled = 0;
+  while (rolled < V.battle.turns.length && pub.roll?.[rolled]?.[V.battle.turns[rolled].role]) rolled++;
+  V.rolled = rolled;
+  V.phase = rolled >= V.battle.turns.length ? 'result' : 'battle';
+  if (V.phase === 'battle') V.need = { roll: rolled, by: V.battle.turns[rolled].role };
+  else V.need = { rematch: true };
+  return V;
+}
+
+// ---------------- バトルのシミュレーション ----------------
+// 1ターン = 両者が1回ずつ振る。ログの1要素(turns[i])は片方の手番。
+function simulate(dice, points, rng) {
+  const P = {};
+  for (const r of ['host', 'guest']) P[r] = { life: points[r], max: points[r], barrier: 0, poisons: [], dooms: [], nullify: 0, lastFace: null };
+  const tied = points.host === points.guest;
+  const first = tied ? (rng() < 0.5 ? 'host' : 'guest') : (points.host < points.guest ? 'host' : 'guest');
+  const turns = [];
+  let result = null;
+
+  const snap = () => {
+    const s = {};
+    for (const r in P) s[r] = {
+      life: P[r].life, barrier: P[r].barrier, nullify: P[r].nullify,
+      poison: P[r].poisons.reduce((x, p) => x + p.left, 0),
+      doom: P[r].dooms.length ? Math.min(...P[r].dooms.map(d => d.left)) : 0,
+    };
+    return s;
+  };
+  const judge = () => {
+    const dh = P.host.life <= 0, dg = P.guest.life <= 0;
+    if (dh && dg) return { winner: null, reason: '両者のライフが同時に0になった' };
+    if (dh) return { winner: 'guest', reason: `${R('host')}のライフが0になった` };
+    if (dg) return { winner: 'host', reason: `${R('guest')}のライフが0になった` };
+    return null;
+  };
+  const hit = (t, n, pierce, L) => {
+    if (!pierce && P[t].barrier > 0) { P[t].barrier--; L.push(`${R(t)}のバリアが${n}ダメージを防いだ`); return; }
+    P[t].life -= n; L.push(`${R(t)}に${n}ダメージ`);
+  };
+  const heal = (t, n, L) => {
+    const v = Math.max(0, Math.min(n, P[t].max - P[t].life));
+    P[t].life += v; L.push(v > 0 ? `${R(t)}が${v}回復` : `${R(t)}は回復しなかった(最大ライフ)`);
+  };
+  function resolve(me, id, face, L, ctx, depth) {
+    const op = other(me), a = ABIL[id];
+    for (const f of fxFor(a, face)) {
+      switch (f.op) {
+        case 'dmg': for (let i = 0; i < (f.hits || 1); i++) hit(op, f.n, f.pierce, L); break;
+        case 'heal': heal(me, f.n, L); break;
+        case 'poison': P[op].poisons.push({ n: f.n, left: f.ticks }); L.push(`${R(op)}に毒(${f.ticks}ターン)`); break;
+        case 'gamble':
+          if (rng() < f.p) { L.push('コインは表!'); hit(op, f.n, false, L); } else L.push('コインは裏…外れ');
+          break;
+        case 'both': hit(me, f.n, false, L); hit(op, f.n, false, L); break;
+        case 'drain': hit(op, f.n, false, L); heal(me, f.heal, L); break;
+        case 'chase': hit(op, P[op].life * 2 <= P[op].max ? f.hi : f.lo, false, L); break;
+        case 'barrier':
+          if (P[me].barrier >= f.n) L.push(`${R(me)}はすでにバリアがあるので効果なし`);
+          else { P[me].barrier = f.n; L.push(`${R(me)}がバリアを張った${f.n > 1 ? `(${f.n}回分)` : ''}`); }
+          break;
+        case 'chain': ctx.chain = true; L.push('もう一度振る!'); break;
+        case 'copy': {
+          const lf = P[op].lastFace;
+          if (depth > 0) { L.push('コピーのコピーは何も起きない'); break; }
+          if (!lf) { L.push(`${R(op)}はまだ振っていないので何も起きない`); break; }
+          const cid = dice[op][lf - 1];
+          L.push(`${R(op)}の${lf}の面「${ABIL[cid].name}」をコピー`);
+          resolve(me, cid, lf, L, ctx, depth + 1);
+          break;
+        }
+        case 'seal': P[op].nullify++; L.push(`${R(op)}の次の出目を封印`); break;
+        case 'selfdmg': hit(me, f.n, false, L); break;
+        case 'none': L.push('何も起きない'); break;
+        case 'trip': P[me].nullify++; L.push(`${R(me)}は転んだ(次の出目が無効)`); break;
+        case 'rampage': hit(me, f.n, false, L); heal(op, f.heal, L); break;
+        case 'doom': P[op].dooms.push({ n: f.n, left: f.delay }); L.push(`${R(op)}に死の宣告(${f.delay}ターン後)`); break;
+      }
+    }
+  }
+
+  outer:
+  for (let t = 0; t < TURN_LIMIT * 2; t++) {
+    const me = t % 2 === 0 ? first : other(first);
+    const T = { role: me, round: Math.floor(t / 2) + 1, steps: [] };
+    turns.push(T);
+    // ターン開始時の処理(毒・死の宣告)
+    const L = [];
+    for (const p of P[me].poisons) { L.push('毒が回る'); hit(me, p.n, true, L); p.left--; }
+    P[me].poisons = P[me].poisons.filter(p => p.left > 0);
+    for (const d of P[me].dooms) { d.left--; if (d.left === 0) { L.push('死の宣告が発動!'); hit(me, d.n, false, L); } }
+    P[me].dooms = P[me].dooms.filter(d => d.left > 0);
+    if (L.length) {
+      T.steps.push({ kind: 'tick', lines: L, snap: snap() });
+      if ((result = judge())) break outer;
+    }
+    for (let chain = 0; ; chain++) {
+      const face = 1 + Math.floor(rng() * FACES);
+      const id = dice[me][face - 1];
+      const step = { kind: 'roll', face, id, lines: [], invalid: false };
+      const ctx = { chain: false };
+      if (P[me].nullify > 0) { P[me].nullify--; step.invalid = true; step.lines.push('この出目は無効になった'); }
+      else resolve(me, id, face, step.lines, ctx, 0);
+      P[me].lastFace = face;
+      if (ctx.chain && chain >= CHAIN_MAX) { step.lines.push(`(連続行動は${CHAIN_MAX}回まで)`); ctx.chain = false; }
+      step.snap = snap();
+      T.steps.push(step);
+      if ((result = judge())) break outer;
+      if (!ctx.chain) break;
+    }
+  }
+  if (!result) {
+    const h = P.host.life, g = P.guest.life;
+    result = h === g
+      ? { winner: null, reason: `${TURN_LIMIT}ターンで決着せず、残りライフも同じ` }
+      : { winner: h > g ? 'host' : 'guest', reason: `${TURN_LIMIT}ターンで決着せず、残りライフが多い方の勝ち` };
+    result.timeout = true;
+  }
+  return { first, tied, turns, result, init: { host: points.host, guest: points.guest } };
+}
+// =====================================================================
+// LOGIC END
+// =====================================================================
+
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserSessionPersistence, connectAuthEmulator } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getDatabase, ref, set, get, update, remove, onValue, onDisconnect, serverTimestamp, connectDatabaseEmulator, query, orderByChild, endAt, limitToFirst } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+
+// [TEST] ?emu をつけるとローカルの Firebase エミュレータにつなぐ(開発用)
+const EMU = new URLSearchParams(location.search).has('emu');
+const config = EMU
+  ? { apiKey: 'demo-key', projectId: 'demo-dice-auction', databaseURL: 'http://127.0.0.1:9000?ns=demo-dice-auction-default-rtdb' } // [TEST]
+  : FIREBASE_CONFIG;
+const configured = !!config.databaseURL;
+
+let auth, db;
+if (configured) {
+  const app = initializeApp(config);
+  auth = getAuth(app);
+  db = getDatabase(app);
+  if (EMU) { // [TEST]
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+    connectDatabaseEmulator(db, '127.0.0.1', 9000);
+  }
+}
+
+// ---------------- クライアントの状態 ----------------
+const SESSION_KEY = 'diceauction_room_v1';
+const NAME_KEY = 'diceauction_name_v1';
+const S = {
+  screen: 'boot', uid: null, code: null, role: null,
+  room: { players: {}, names: {}, mode: 'gachi', presence: {}, cur: null },
+  g: null, pub: null, V: null,
+  sec: {}, mySec: {}, fetching: new Set(), writing: new Set(),
+  err: '', bidDraft: '', pickSel: null, autoRoll: false,
+};
+let roomUnsubs = [], gameUnsubs = [];
+const pathRoom = () => `rooms/${S.code}`;
+const pathGame = () => `rooms/${S.code}/games/${S.g}`;
+const me = () => S.role, op = () => other(S.role);
+
+function lsGet(k, store = localStorage) { try { return store.getItem(k); } catch { return null; } }
+function lsSet(k, v, store = localStorage) { try { v == null ? store.removeItem(k) : store.setItem(k, v); } catch {} }
+
+// ---------------- 起動 ----------------
+async function boot() {
+  if (!configured) { S.screen = 'noconfig'; render(); return; }
+  await setPersistence(auth, browserSessionPersistence); // タブごとに別のプレイヤーになる(再読み込みでは同じ人のまま)
+  onAuthStateChanged(auth, async user => {
+    if (!user) { try { await signInAnonymously(auth); } catch (e) { S.err = 'ログインに失敗しました: ' + e.message; S.screen = 'lobby'; render(); } return; }
+    if (S.uid === user.uid) return;
+    S.uid = user.uid;
+    const saved = JSON.parse(lsGet(SESSION_KEY, sessionStorage) || 'null');
+    if (saved && saved.code) {
+      const pl = (await get(ref(db, `rooms/${saved.code}/players`)).catch(() => null))?.val();
+      if (pl && pl[saved.role] === S.uid) { enterRoom(saved.code, saved.role); return; }
+      lsSet(SESSION_KEY, null, sessionStorage);
+    }
+    S.screen = 'lobby'; render();
+  });
+}
+
+// ---------------- ロビー ----------------
+async function createRoom() {
+  S.err = '';
+  for (let i = 0; i < 15; i++) {
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    try {
+      await set(ref(db, `rooms/${code}`), { players: { host: S.uid }, createdAt: serverTimestamp(), mode: 'gachi' });
+      await saveName(code, 'host');
+      enterRoom(code, 'host');
+      cleanupOldRooms();
+      return;
+    } catch (e) { /* 使用中のコード → 別のコードで再試行 */ }
+  }
+  S.err = 'ルームを作成できませんでした。もう一度お試しください'; render();
+}
+async function joinRoom(code) {
+  S.err = '';
+  if (!/^\d{4}$/.test(code)) { S.err = '4桁の数字を入力してください'; render(); return; }
+  const pl = (await get(ref(db, `rooms/${code}/players`)).catch(() => null))?.val();
+  if (!pl || !pl.host) { S.err = 'そのルームは見つかりません'; render(); return; }
+  if (pl.host === S.uid) { enterRoom(code, 'host'); return; }
+  if (pl.guest && pl.guest !== S.uid) { S.err = 'そのルームは満員です'; render(); return; }
+  if (!pl.guest) {
+    try { await set(ref(db, `rooms/${code}/players/guest`), S.uid); }
+    catch (e) { S.err = '参加できませんでした(満員の可能性があります)'; render(); return; }
+  }
+  await saveName(code, 'guest');
+  enterRoom(code, 'guest');
+  cleanupOldRooms();
+}
+// 古い部屋をまとめて消す。ルール側は endAt の等価比較しか効かないので、1時間単位に丸めた同じ値を使う
+async function cleanupOldRooms() {
+  try {
+    const offset = (await get(ref(db, '.info/serverTimeOffset'))).val() || 0;
+    const now = Date.now() + offset;
+    const cutoff = now - (now % 3600000) - ROOM_CLEANUP_MS;
+    const snap = await get(query(ref(db, 'rooms'), orderByChild('createdAt'), endAt(cutoff), limitToFirst(50)));
+    const olds = [];
+    snap.forEach(c => { if (c.key !== S.code) olds.push(c.key); });
+    await Promise.all(olds.map(k => remove(ref(db, `rooms/${k}`)).catch(() => {})));
+  } catch (e) { /* 掃除に失敗してもゲームには影響しない */ }
+}
+async function saveName(code, role) {
+  const nm = (lsGet(NAME_KEY) || '').trim().slice(0, 12);
+  if (nm) await set(ref(db, `rooms/${code}/names/${role}`), nm).catch(() => {});
+}
+
+function clearRoomSubs() { roomUnsubs.forEach(u => u()); roomUnsubs = []; clearGameSubs(); }
+function clearGameSubs() { gameUnsubs.forEach(u => u()); gameUnsubs = []; }
+
+function enterRoom(code, role) {
+  clearRoomSubs();
+  S.code = code; S.role = role; S.g = null; S.pub = null; S.V = null;
+  S.room = { players: {}, names: {}, mode: 'gachi', presence: {}, cur: null };
+  lsSet(SESSION_KEY, JSON.stringify({ code, role }), sessionStorage);
+  S.screen = 'room';
+  const rp = pathRoom();
+  const sub = (p, fn) => roomUnsubs.push(onValue(ref(db, p), s => { if (S.code !== code) return; fn(s.val()); render(); }, e => console.warn(p, e)));
+  sub(`${rp}/players`, v => { S.room.players = v || {}; });
+  sub(`${rp}/names`, v => { S.room.names = v || {}; });
+  sub(`${rp}/mode`, v => { S.room.mode = v || 'gachi'; });
+  sub(`${rp}/presence`, v => { S.room.presence = v || {}; });
+  sub(`${rp}/cur`, v => { S.room.cur = v ?? null; if (v != null && v !== S.g) enterGame(v); });
+  // 接続状態
+  const myPres = ref(db, `${rp}/presence/${role}`);
+  roomUnsubs.push(onValue(ref(db, '.info/connected'), s => {
+    if (s.val() === true && S.code === code) { onDisconnect(myPres).set(false); set(myPres, true).catch(() => {}); }
+  }));
+  render();
+}
+function leaveRoom() {
+  if (S.code && S.role) set(ref(db, `${pathRoom()}/presence/${S.role}`), false).catch(() => {});
+  clearRoomSubs();
+  lsSet(SESSION_KEY, null, sessionStorage);
+  S.code = S.role = S.g = S.pub = S.V = null; S.screen = 'lobby'; render();
+}
+
+// ---------------- ゲーム ----------------
+function enterGame(g) {
+  clearGameSubs();
+  S.g = g; S.pub = null; S.V = null; S.sec = {}; S.mySec = {}; S.fetching = new Set(); S.writing = new Set();
+  S.bidDraft = ''; S.pickSel = null; resetPlayback();
+  const gp = pathGame();
+  gameUnsubs.push(onValue(ref(db, `${gp}/pub`), s => {
+    if (S.g !== g) return;
+    S.pub = s.val();
+    if (S.pub?.start) S.screen = 'game';
+    onGameData();
+  }, e => console.warn('pub', e)));
+}
+
+function rev(key) { return S.sec[key] || null; }
+
+function onGameData() {
+  if (!S.pub?.start) { render(); return; }
+  // 両者の伏せ値がそろったものを読みに行く
+  const flags = S.pub.flag || {};
+  for (const key in flags) {
+    const f = flags[key];
+    if (f.host && f.guest && !S.sec[key] && !S.fetching.has(key)) fetchSecret(key);
+    else if (f[me()] && S.mySec[key] == null && !S.fetching.has('my:' + key)) fetchMySecret(key); // 再読み込み後に自分の入札額を表示するため
+  }
+  S.V = derive(S.pub, rev);
+  if (S.V.phase !== 'pick') S.pickSel = null;
+  if (S.V.need?.bid !== S.bidKey) { S.bidKey = S.V.need?.bid; S.bidDraft = ''; S.err = ''; }
+  runAutoActions();
+  render();
+}
+async function fetchSecret(key) {
+  const g = S.g;
+  S.fetching.add(key);
+  try {
+    const [h, gu] = await Promise.all(['host', 'guest'].map(r => get(ref(db, `${pathGame()}/sec/${key}/${r}`))));
+    if (S.g !== g) return;
+    S.sec[key] = { host: h.val(), guest: gu.val() };
+  } catch (e) {
+    console.warn('fetchSecret', key, e);
+    setTimeout(() => { S.fetching.delete(key); onGameData(); }, 800);
+    return;
+  }
+  S.fetching.delete(key);
+  onGameData();
+}
+async function fetchMySecret(key) {
+  S.fetching.add('my:' + key);
+  try { const v = (await get(ref(db, `${pathGame()}/sec/${key}/${me()}`))).val(); if (v != null) { S.mySec[key] = v; render(); } }
+  catch (e) { console.warn('fetchMySecret', e); }
+}
+async function writeSecret(key, value) {
+  if (S.writing.has(key) || S.pub?.flag?.[key]?.[me()]) return;
+  S.writing.add(key);
+  S.mySec[key] = value;
+  try {
+    await update(ref(db, pathGame()), { [`sec/${key}/${me()}`]: value, [`pub/flag/${key}/${me()}`]: true });
+  } catch (e) {
+    console.warn('writeSecret', key, e);
+    S.writing.delete(key); delete S.mySec[key];
+    toast('送信に失敗しました。もう一度お試しください');
+  }
+}
+function randomU32() { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0]; }
+
+// 乱数の提出は自動で行う
+function runAutoActions() {
+  const V = S.V; if (!V) return;
+  if (V.need?.nonce) writeSecret(V.need.nonce, randomU32());
+  if (V.phase === 'result' && S.role === 'host') maybeStartRematch();
+  scheduleAutoRoll();
+}
+
+async function submitBid() {
+  const V = S.V; if (V?.phase !== 'bid') return;
+  const max = maxBidFor(V.points[me()]);
+  const v = Number(S.bidDraft);
+  if (S.bidDraft === '' || !Number.isInteger(v) || v < 0) { S.err = '0以上の整数を入力してください'; render(); return; }
+  if (v > max) { S.err = 'それ以上は入札できません'; render(); return; }
+  S.err = '';
+  await writeSecret(V.need.bid, v);
+  S.bidDraft = '';
+  render();
+}
+async function submitPick() {
+  const V = S.V; if (V?.phase !== 'pick' || V.need.by !== me() || !S.pickSel) return;
+  const { side, face } = S.pickSel;
+  try { await set(ref(db, `${pathGame()}/pub/pick/${V.need.pick}/${me()}`), { side, face }); S.pickSel = null; }
+  catch (e) { toast('送信に失敗しました'); console.warn(e); }
+}
+async function pressRoll() {
+  const V = S.V; if (V?.phase !== 'battle' || V.need.by !== me() || PB.busy || PB.shown < V.rolled) return;
+  const t = V.need.roll;
+  if (S.writing.has('roll' + t)) return;
+  S.writing.add('roll' + t);
+  try { await set(ref(db, `${pathGame()}/pub/roll/${t}/${me()}`), true); }
+  catch (e) { S.writing.delete('roll' + t); console.warn(e); }
+}
+async function pressRematch() {
+  await set(ref(db, `${pathGame()}/pub/rematch/go/${me()}`), true).catch(e => console.warn(e));
+}
+let rematchStarting = false;
+async function maybeStartRematch() {
+  const rm = S.pub?.rematch?.go;
+  if (!rm?.host || !rm?.guest || rematchStarting) return;
+  rematchStarting = true;
+  const next = S.g + 1;
+  try { await update(ref(db, pathRoom()), { cur: next, [`games/${next}/pub/start`]: { mode: S.room.mode, at: serverTimestamp() } }); }
+  catch (e) { console.warn(e); }
+  rematchStarting = false;
+}
+async function startGame() {
+  if (S.role !== 'host' || !S.room.players.guest) return;
+  const next = S.room.cur == null ? 0 : S.room.cur + 1;
+  try { await update(ref(db, pathRoom()), { cur: next, [`games/${next}/pub/start`]: { mode: S.room.mode, at: serverTimestamp() } }); }
+  catch (e) { toast('開始できませんでした'); console.warn(e); }
+}
+
+// ---------------- バトル演出の再生 ----------------
+// V.battle はすでに最後まで計算済み。押された手番の分だけ、順に演出して見せる。
+const PB = { key: null, shown: 0, busy: false, log: [], snap: null, cube: null, hl: null };
+function resetPlayback() { Object.assign(PB, { key: null, shown: 0, busy: false, log: [], snap: null, cube: null, hl: null }); }
+function syncPlayback() {
+  const V = S.V; if (!V?.battle) return;
+  const key = `${S.code}/${S.g}`;
+  if (PB.key !== key) {
+    // 途中から入った(再読み込み)ときは、それまでの手番は演出せずに反映する
+    resetPlayback(); PB.key = key;
+    for (let t = 0; t < V.rolled; t++) applyTurnInstant(t);
+    PB.shown = V.rolled;
+  }
+  // 画面が裏にある間や、2手以上遅れているときは演出を飛ばして追いつく
+  while (!PB.busy && PB.shown < V.rolled && (document.hidden || V.rolled - PB.shown > 1)) {
+    applyTurnInstant(PB.shown); S.writing.delete('roll' + PB.shown); PB.shown++;
+  }
+  if (!PB.busy && PB.shown < V.rolled) playTurn(PB.shown);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.screen === 'game') render(); });
+function applyTurnInstant(t) {
+  const T = S.V.battle.turns[t];
+  for (const st of T.steps) { pushLog(T, st); PB.snap = st.snap; if (st.kind === 'roll') PB.cube = { face: st.face, role: T.role }; }
+}
+function pushLog(T, st) { PB.log.unshift({ role: T.role, round: T.round, st }); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function playTurn(t) {
+  PB.busy = true;
+  const key = PB.key, T = S.V.battle.turns[t];
+  for (const st of T.steps) {
+    if (PB.key !== key) return;
+    if (st.kind === 'roll') {
+      PB.cube = { face: st.face, role: T.role, spin: true };
+      PB.hl = { role: T.role, face: st.face };
+      render(); await sleep(ROLL_ANIM_MS);
+    }
+    pushLog(T, st); PB.snap = st.snap; render();
+    await sleep(STEP_GAP_MS);
+  }
+  if (PB.key !== key) return;
+  PB.shown = t + 1; PB.busy = false;
+  S.writing.delete('roll' + t);
+  render();
+  syncPlayback();
+  scheduleAutoRoll();
+}
+let autoRollTimer = null;
+function scheduleAutoRoll() {
+  clearTimeout(autoRollTimer);
+  const V = S.V;
+  if (!S.autoRoll || V?.phase !== 'battle' || V.need.by !== me()) return;
+  autoRollTimer = setTimeout(() => pressRoll(), AUTO_ROLL_DELAY_MS);
+}
+
+// =====================================================================
+// 画面
+// =====================================================================
+const $app = document.getElementById('app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const who = r => r === me() ? 'あなた' : '相手';
+const nameOf = r => S.room.names?.[r] || (r === 'host' ? 'ホスト' : 'ゲスト');
+const fillNames = s => esc(s).replace(/\{(host|guest)\}/g, (_, r) => `<b class="${r === me() ? 'me' : 'op'}">${who(r)}</b>`);
+const cls = r => (r === me() ? 'me' : 'op');
+
+function render() {
+  const sc = S.screen;
+  let html = '';
+  if (sc === 'boot') html = `<p class="muted center" style="margin-top:80px">接続中…</p>`;
+  else if (sc === 'noconfig') html = viewNoConfig();
+  else if (sc === 'lobby') html = viewLobby();
+  else if (sc === 'room') html = viewRoom();
+  else if (sc === 'game') { syncPlayback(); html = viewGame(); }
+  patch($app, html);
+  if (sc === 'game') afterGameRender();
+}
+// 入力中の欄を壊さないよう、変わったときだけ書き換える
+let lastHtml = '';
+function patch(el, html) {
+  if (html === lastHtml) return;
+  const active = document.activeElement;
+  const keepId = active && active.id;
+  const selStart = active && active.selectionStart;
+  lastHtml = html;
+  el.innerHTML = html;
+  if (keepId) {
+    const n = document.getElementById(keepId);
+    if (n) { n.focus(); try { if (selStart != null) n.setSelectionRange(selStart, selStart); } catch {} }
+  }
+}
+
+function header(extra = '') {
+  return `<header><h1>ダイス<span>オークション</span><small class="muted" style="font-size:12px"> (仮)</small></h1>${extra}<div class="spacer"></div>
+    ${S.code ? `<span class="chip">ルーム ${esc(S.code)}</span><button class="ghost" data-act="leave" style="padding:6px 12px">退出</button>` : ''}</header>`;
+}
+
+function viewNoConfig() {
+  return header() + `<div class="lobby card"><h2>Firebase の設定がまだです</h2>
+    <p class="muted">index.html 冒頭の <code>FIREBASE_CONFIG</code> に、Firebase プロジェクトの設定値を入れてください。</p>
+    <p class="muted">開発用: Firebase エミュレータを起動して <code>?emu</code> をつけて開くと、ローカルで遊べます。</p></div>`;
+}
+
+function rulesText() {
+  return `<div class="rules-text">
+  <b>遊び方</b><br>
+  ・2人とも${START_POINTS}ポイントを持ってスタート。今回の${ABILITY_COUNT}個の能力が、1つずつ順番に競りに出ます(順番は出るまで分かりません)<br>
+  ・入札は同時に伏せて出します。高いほうが落札して支払い、<b>自分か相手のダイス</b>の空いている面に書き込みます<br>
+  ・プラスの能力は自分に、マイナスの能力は相手に。「面指定」の能力は、決まった数字の面に書くと本領を発揮します<br>
+  ・どちらかのダイスが埋まったら、残りは空いているダイスに自動で書き込まれます<br>
+  ・<b>残ったポイントがそのままライフ</b>になり、完成したダイスを交互に振り合って戦います。先攻は残りポイントが少ない人です</div>`;
+}
+
+function viewLobby() {
+  const nm = lsGet(NAME_KEY) || '';
+  return header() + `<div class="lobby">
+    <div class="card"><h2>名前(任意)</h2><input id="nameInput" maxlength="12" placeholder="12文字まで" value="${esc(nm)}" style="width:100%"></div>
+    <div class="card"><h2>ルームを作る</h2><p class="muted" style="margin:0 0 10px;font-size:13px">4桁のルーム番号が発行されます。相手に伝えてください。</p>
+      <button class="primary" data-act="create" style="width:100%">ルームを作る</button></div>
+    <div class="card"><h2>ルームに参加する</h2>
+      <div class="row"><input id="codeInput" inputmode="numeric" maxlength="4" placeholder="ルーム番号(4桁)" style="flex:1"><button data-act="join">参加</button></div></div>
+    <div class="err center">${esc(S.err)}</div>
+    <div class="card">${rulesText()}</div>
+    <p class="center muted" style="font-size:12px"><a href="about.html" style="color:var(--sub)">利用規約・データの取り扱い・クレジット</a></p>
+  </div>`;
+}
+
+function viewRoom() {
+  const pl = S.room.players, isHost = S.role === 'host';
+  const slot = r => {
+    const has = !!pl[r];
+    const online = S.room.presence?.[r];
+    return `<div class="row" style="justify-content:space-between;padding:6px 0"><span>${r === 'host' ? 'ホスト' : 'ゲスト'}${r === me() ? '(あなた)' : ''}</span>
+      <b>${has ? esc(nameOf(r)) + (online === false ? ' <span class="chip warn">切断中</span>' : '') : '<span class="muted">待っています…</span>'}</b></div>`;
+  };
+  const modeSel = isHost
+    ? `<select id="modeSel" data-act="mode">${Object.entries(MODES).map(([k, m]) => `<option value="${k}" ${S.room.mode === k ? 'selected' : ''}>${m.label}</option>`).join('')}</select>`
+    : `<b>${esc(MODES[S.room.mode]?.label)}</b>`;
+  const poolNote = !POOLS[MODES[S.room.mode].pool] ? `<div class="muted" style="font-size:12px;margin-top:6px">※ふざけ版の能力プールは未作成のため、いまはガチ版のプールで代用しています</div>` : '';
+  return header() + `<div class="lobby">
+    <div class="card center"><div class="muted">ルーム番号</div><div class="code">${esc(S.code)}</div><div class="muted" style="font-size:13px">この番号を相手に伝えてください</div></div>
+    <div class="card">${slot('host')}${slot('guest')}</div>
+    <div class="card"><h2>モード</h2>${modeSel}${poolNote}
+      <div class="muted" style="font-size:12px;margin-top:8px">開示あり: 一覧で能力の効果まで見える / 開示なし: 名前だけ見える(効果は落札されたときに公開)</div></div>
+    ${isHost
+      ? `<button class="primary" data-act="start" ${pl.guest ? '' : 'disabled'}>ゲーム開始</button>${pl.guest ? '' : '<div class="muted center" style="font-size:13px">相手の参加を待っています</div>'}`
+      : `<div class="wait center" style="justify-content:center">ホストの開始を待っています<span class="dots"></span></div>`}
+    <div class="card">${rulesText()}</div>
+  </div>`;
+}
+
+// ---- ゲーム画面 ----
+function abilKnown(id) {
+  // 開示なしモードでは、落札済みの能力だけ効果が見える(自動で書き込まれた能力は最後まで伏せたまま)
+  const V = S.V;
+  return V.reveal || (V.sold[id] && !V.sold[id].auto) || (V.cur?.winner && V.cur.item === id);
+}
+function viewGame() {
+  const V = S.V;
+  if (!V) return header() + `<p class="muted center">読み込み中…</p>`;
+  const modeChip = `<span class="chip">${esc(MODES[V.mode].label)}</span>`;
+  return header(modeChip) + viewLifebar() + `<div class="grid">
+    <div class="listp card">${viewList()}</div>
+    <div class="mainp">
+      <div class="card stage">${viewStage()}</div>
+      <div class="card">${viewDice()}</div>
+      ${V.phase === 'battle' || V.phase === 'result' ? `<div class="card"><h3>バトルログ</h3>${viewLog()}</div>` : ''}
+    </div></div>`;
+}
+function viewLifebar() {
+  const V = S.V;
+  const inBattle = !!V.battle;
+  const snap = inBattle ? (PB.snap || { host: { life: V.points.host }, guest: { life: V.points.guest } }) : null;
+  const turnRole = V.phase === 'battle' ? V.need.by : null;
+  const plate = r => {
+    const life = inBattle ? snap[r].life : V.points[r];
+    const st = [];
+    if (inBattle) {
+      const s = snap[r];
+      if (s.barrier) st.push(`🛡バリア×${s.barrier}`);
+      if (s.poison) st.push(`☠毒 残り${s.poison}`);
+      if (s.doom) st.push(`💀宣告 あと${s.doom}`);
+      if (s.nullify) st.push(`🚫次の出目が無効${s.nullify > 1 ? '×' + s.nullify : ''}`);
+      st.push(`最大${V.battle.init[r]}`);
+    }
+    const online = S.room.presence?.[r] === false ? `<div class="off">切断中</div>` : '';
+    return `<div class="plate ${cls(r)} ${turnRole === r ? 'turn' : ''}">
+      <div><div class="lbl">${inBattle ? 'ライフ' : '残りポイント=ライフ'}</div><div class="life">${Math.max(0, life)}</div></div>
+      <div><div class="who">${who(r)}</div><div class="nm">${esc(nameOf(r))}</div><div class="st">${st.map(x => `<span>${x}</span>`).join('')}</div>${online}</div></div>`;
+  };
+  return `<div class="lifebar">${plate(me())}<div class="vs">VS</div>${plate(op())}</div>`;
+}
+function catOf(id) { return abilKnown(id) ? ABIL[id].cat : 'unk'; }
+function viewList() {
+  const V = S.V;
+  const rows = V.list.map(id => {
+    const a = ABIL[id], known = abilKnown(id), s = V.sold[id], now = V.cur?.item === id;
+    let status = '';
+    if (s) status = s.auto ? `自動 → <b class="${cls(s.target)}">${who(s.target)}</b>の${s.face}`
+      : `<b class="${cls(s.winner)}">${who(s.winner)}</b> ${s.price}pt<br>→ <b class="${cls(s.target)}">${who(s.target)}</b>の${s.face}`;
+    else if (now) status = '<b style="color:var(--gold)">競り中</b>';
+    return `<div class="ab ${s ? 'sold' : ''} ${now ? 'now' : ''}"><div class="bar cat-${catOf(id)}"></div>
+      <div><div class="n">${esc(a.name)}</div><div class="d">${known ? `${esc(a.cat)}・${esc(abilDesc(a))}` : '効果は伏せられています'}</div></div>
+      <div class="s">${status}</div></div>`;
+  }).join('');
+  const done = V.history.length + V.auto.length;
+  return `<h3>今回の${V.list.length}個(${done}/${V.list.length} 書き込み済み)</h3>${rows || '<p class="muted">抽選中…</p>'}`;
+}
+function lotCard(id, tag) {
+  const a = ABIL[id], known = abilKnown(id);
+  return `<div class="lot"><div><div class="tag">${tag}</div><div class="name">${esc(a.name)}</div>
+    <div class="eff">${known ? `<span class="catb cat-${a.cat}">${esc(a.cat)}</span>${esc(abilDesc(a))}` : '<span class="catb cat-unk">？？？</span><span class="muted">効果は落札後に公開されます</span>'}</div></div></div>`;
+}
+function bidResultLine(c) {
+  if (!c) return '';
+  const lines = c.bids.map((b, i) => `${i ? '再入札' : '入札'}: <b class="me">あなた ${b[me()]}</b> / <b class="op">相手 ${b[op()]}</b>`).join('<br>');
+  const w = c.winner ? `→ <b class="${cls(c.winner)}">${who(c.winner)}</b>が${c.price}ptで落札${c.random ? '(再入札も同額だったのでランダムで決定)' : ''}` : '';
+  return `<div class="res">${lines}<br>${w}</div>`;
+}
+function viewStage() {
+  const V = S.V, ph = V.phase;
+  const last = V.history[V.history.length - 1];
+  const lastLine = last ? `<div class="banner"><span class="muted" style="font-size:12px">前回: ${esc(ABIL[last.item].name)}</span><br>${bidResultLine(last)}
+      <span class="res">→ <b class="${cls(last.target)}">${who(last.target)}</b>のダイスの${last.face}の面に書き込み</span></div>` : '';
+
+  if (ph === 'prepare') {
+    const k = V.need.nonce;
+    const msg = k === 'draw' ? '今回の能力を抽選しています' : k === 'auto' ? '残りの能力を自動で書き込んでいます' : k === 'battle' ? 'バトルの準備をしています' : k.startsWith('t') ? '同額だったので、ランダムで落札者を決めています' : '次の能力を選んでいます';
+    const waiting = S.pub?.flag?.[k]?.[me()] && !S.pub?.flag?.[k]?.[op()];
+    return `${lastLine}<div class="wait">${msg}<span class="dots"></span></div>${waiting && S.room.presence?.[op()] === false ? '<div class="muted">相手の接続を待っています</div>' : ''}`;
+  }
+  if (ph === 'bid') {
+    const a = V.need.attempt, key = V.need.bid;
+    const mine = S.pub?.flag?.[key]?.[me()], theirs = S.pub?.flag?.[key]?.[op()];
+    const max = maxBidFor(V.points[me()]);
+    const tie = a === 1 ? `<div class="banner tie"><b>同額でした${SHOW_TIE_AMOUNT ? `(どちらも ${V.cur.bids[0].host}pt)` : ''}</b>。もう一度だけ入札してください。再入札でも同額なら、ランダムで落札者が決まります。</div>` : '';
+    let box;
+    if (mine) {
+      const myv = S.mySec[key];
+      box = `<div class="banner">あなたの入札: <b style="font-size:20px">${myv ?? '—'}</b> pt</div>
+        <div class="wait">${theirs ? '開票しています' : '相手の入札を待っています'}<span class="dots"></span></div>`;
+    } else {
+      const v = S.bidDraft, over = v !== '' && Number(v) > max;
+      box = `<div class="bidbox">
+        <div class="bidrow"><input id="bidInput" type="number" inputmode="numeric" min="0" max="${max}" step="1" value="${esc(v)}" placeholder="0">
+          <span class="muted">pt(0〜${max}、所持ポイントは必ず1残ります)</span>
+          <button class="primary" data-act="bid" ${v === '' || over ? 'disabled' : ''}>入札を確定</button></div>
+        <div class="bidrow">${[['0', 'set0'], ['+1', 'add1'], ['+5', 'add5'], ['+10', 'add10'], ['-1', 'sub1'], ['-5', 'sub5'], [`最大 ${max}`, 'max']].map(([t, k]) => `<button class="q" data-act="q" data-q="${k}">${t}</button>`).join('')}</div>
+        <div class="err">${over ? 'それ以上は入札できません' : esc(S.err)}</div>
+        <div class="muted" style="font-size:12px">${theirs ? '相手はもう入札しました。' : ''}入札は確定するまで相手に見えません。0は「いらない」の意思表示です。</div></div>`;
+    }
+    return `${lastLine}${tie}${lotCard(V.cur.item, `第${V.round}競り`)}${box}`;
+  }
+  if (ph === 'pick') {
+    const mine = V.need.by === me();
+    const a = ABIL[V.cur.item];
+    const res = `<div class="banner gold">${bidResultLine(V.cur)}</div>`;
+    if (!mine) return `${res}${lotCard(V.cur.item, '落札')}<div class="wait">相手が書き込み先を選んでいます<span class="dots"></span></div>`;
+    const sel = S.pickSel;
+    const hint = a.face ? `<div class="muted" style="font-size:13px">面指定: <b style="color:var(--gold)">${a.face}の面</b>に書くと本領を発揮します(ほかの面だと「${esc(fxText(a.fxOther))}」)</div>` : '';
+    return `${res}${lotCard(V.cur.item, '落札しました!')}${hint}
+      <div class="banner">下のダイスの<b>空いている面</b>をクリックして、書き込み先を選んでください。自分のダイスにも、相手のダイスにも書けます。</div>
+      <div class="row"><button class="primary" data-act="pick" ${sel ? '' : 'disabled'}>${sel ? `${sel.side === 'self' ? 'あなた' : '相手'}のダイスの${sel.face}の面に書く` : '面を選んでください'}</button>
+      ${sel ? `<span class="muted" style="font-size:13px">→ 効果: ${esc(faceDesc(a, sel.face))}</span>` : ''}</div>`;
+  }
+  if (ph === 'battle' || ph === 'result') return viewBattle();
+  return '';
+}
+function viewDice() {
+  const V = S.V;
+  const picking = V.phase === 'pick' && V.need.by === me();
+  const die = r => {
+    const side = r === me() ? 'self' : 'opp';
+    const cells = V.dice[r].map((id, i) => {
+      const f = i + 1;
+      const sel = S.pickSel && S.pickSel.side === side && S.pickSel.face === f;
+      const hl = PB.hl && PB.hl.role === r && PB.hl.face === f && V.battle;
+      if (!id) {
+        if (picking) {
+          const a = ABIL[V.cur.item];
+          return `<div class="face empty can ${sel ? 'picked' : ''}" data-act="sel" data-side="${side}" data-face="${f}"><span class="num">${f}</span>
+            ${sel ? `<div class="fn">${esc(a.name)}</div><div class="fe">${esc(faceDesc(a, f))}</div>` : `空き${a.face === f ? ' <span class="honryo">★本領</span>' : ''}`}</div>`;
+        }
+        return `<div class="face empty"><span class="num">${f}</span>空き</div>`;
+      }
+      const a = ABIL[id], known = abilKnown(id);
+      const isNew = V.history.length && V.history[V.history.length - 1].item === id && V.phase !== 'battle' && V.phase !== 'result';
+      return `<div class="face ${isNew ? 'flash' : ''} ${hl ? 'hit' : ''}" title="${esc(known ? abilDesc(a) : '効果は伏せられています')}"><span class="stripe cat-${catOf(id)}"></span><span class="num">${f}</span>
+        <div class="fn">${esc(a.name)}</div><div class="fe">${known ? esc(faceDesc(a, f)) : '？？？'}</div>
+        ${known && a.face === f ? '<div class="honryo">★本領</div>' : ''}</div>`;
+    }).join('');
+    return `<div class="die ${cls(r)}"><h4>${who(r)}のダイス</h4><div class="faces">${cells}</div></div>`;
+  };
+  return `<div class="dicep">${die(me())}${die(op())}</div>`;
+}
+const CUBE_ROT = { 1: [0, 0], 2: [0, -90], 3: [-90, 0], 4: [90, 0], 5: [0, 90], 6: [0, 180] };
+function viewBattle() {
+  const V = S.V, B = V.battle;
+  const shownAll = PB.shown >= B.turns.length && !PB.busy;
+  const role = PB.cube?.role || B.first;
+  const faces = [1, 2, 3, 4, 5, 6].map(f => {
+    const id = V.dice[role][f - 1];
+    return `<div class="cf cf${f}"><div class="cn">${f}</div><div class="ct">${esc(ABIL[id].name)}</div></div>`;
+  }).join('');
+  let top;
+  if (V.phase === 'result' && shownAll) {
+    const w = B.result.winner;
+    const t = w == null ? ['引き分け', 'draw'] : w === me() ? ['あなたの勝ち!', 'win'] : ['あなたの負け', 'lose'];
+    const rm = S.pub?.rematch?.go || {};
+    top = `<div class="result ${t[1]}">${t[0]}</div><div class="center muted">${fillNames(B.result.reason)}</div>
+      <div class="row" style="justify-content:center;margin-top:10px">
+        ${rm[me()] ? `<div class="wait">${rm[op()] ? '再戦を準備しています' : '相手の返事を待っています'}<span class="dots"></span></div>` : `<button class="primary" data-act="rematch">もう一度遊ぶ</button>`}
+        ${S.role === 'host' ? `<select id="modeSel" data-act="mode">${Object.entries(MODES).map(([k, m]) => `<option value="${k}" ${S.room.mode === k ? 'selected' : ''}>${m.label}</option>`).join('')}</select>` : ''}
+      </div>${rm[op()] && !rm[me()] ? '<div class="center muted" style="margin-top:6px">相手は再戦を希望しています</div>' : ''}`;
+  } else {
+    const nextT = PB.busy ? B.turns[PB.shown] : B.turns[V.rolled];
+    const myTurn = V.phase === 'battle' && V.need.by === me() && !PB.busy && PB.shown >= V.rolled;
+    const turnInfo = nextT ? `ターン <b>${nextT.round}</b> / ${TURN_LIMIT} — <b class="${cls(nextT.role)}">${who(nextT.role)}</b>の番` : '';
+    const firstInfo = `先攻: <b class="${cls(B.first)}">${who(B.first)}</b>${B.tied ? '(残りポイントが同じなのでランダム)' : '(残りポイントが少ない方)'}`;
+    top = `<div class="turnline">${firstInfo}</div><div class="turnline" style="margin-top:4px">${turnInfo}</div>
+      <div class="row" style="margin-top:12px">
+        ${myTurn ? `<button class="primary" data-act="roll" style="font-size:18px;padding:12px 26px">🎲 ダイスを振る</button>`
+               : `<div class="wait">${PB.busy ? 'ダイスが転がっています' : '相手が振るのを待っています'}<span class="dots"></span></div>`}
+        <label class="toggle"><input type="checkbox" id="autoRoll" ${S.autoRoll ? 'checked' : ''}> 自分の番は自動で振る</label></div>`;
+  }
+  return `<div class="arena"><div class="scene"><div class="cube ${cls(role)}" id="cube" style="--rollms:${ROLL_ANIM_MS}ms">${faces}</div></div><div>${top}</div></div>`;
+}
+function viewLog() {
+  if (!PB.log.length) return '<p class="muted">まだ誰も振っていません</p>';
+  return `<div class="log">${PB.log.map(({ role, round, st }) => {
+    const head = st.kind === 'tick' ? `ターン${round} ${who(role)}の番のはじめ` : `ターン${round} ${who(role)}: ${st.face}の目「${esc(ABIL[st.id].name)}」${st.invalid ? '(無効)' : ''}`;
+    return `<div class="le ${cls(role)}"><div class="h">${head}</div>${st.lines.map(fillNames).join('<br>')}</div>`;
+  }).join('')}</div>`;
+}
+// キューブは描き直しのたびに作り直されるので、回転は描画後にかける
+let cubeSpin = 0, lastCubeAnim = null;
+function afterGameRender() {
+  const el = document.getElementById('cube');
+  if (!el || !PB.cube) return;
+  const [x, y] = CUBE_ROT[PB.cube.face];
+  const animId = PB.cube.spin ? `${PB.shown}:${PB.log.length}` : null;
+  if (animId && animId !== lastCubeAnim) {
+    lastCubeAnim = animId;
+    cubeSpin++;
+    const from = `rotateX(${x + 720 * (cubeSpin) - 360}deg) rotateY(${y + 720 * cubeSpin - 540}deg)`;
+    el.style.transition = 'none'; el.style.transform = from;
+    el.getBoundingClientRect();
+    el.style.transition = '';
+  }
+  el.style.transform = `rotateX(${x + 720 * cubeSpin}deg) rotateY(${y + 720 * cubeSpin}deg)`;
+}
+
+let toastTimer;
+function toast(msg) {
+  let el = document.querySelector('.toast');
+  if (!el) { el = document.createElement('div'); el.className = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.remove(), 2500);
+}
+
+// ---------------- 操作 ----------------
+$app.addEventListener('click', e => {
+  const t = e.target.closest('[data-act]'); if (!t) return;
+  const act = t.dataset.act;
+  if (act === 'create') createRoom();
+  else if (act === 'join') joinRoom(document.getElementById('codeInput').value.trim());
+  else if (act === 'leave') leaveRoom();
+  else if (act === 'start') startGame();
+  else if (act === 'bid') submitBid();
+  else if (act === 'q') {
+    const max = maxBidFor(S.V.points[me()]);
+    const cur = Number(S.bidDraft) || 0, q = t.dataset.q;
+    let v = q === 'set0' ? 0 : q === 'max' ? max : cur + Number(q.replace(/\D+/, '')) * (q.startsWith('sub') ? -1 : 1);
+    v = Math.max(0, v);
+    S.bidDraft = String(v); S.err = v > max ? 'それ以上は入札できません' : ''; render();
+  }
+  else if (act === 'sel') { S.pickSel = { side: t.dataset.side, face: Number(t.dataset.face) }; render(); }
+  else if (act === 'pick') submitPick();
+  else if (act === 'roll') pressRoll();
+  else if (act === 'rematch') pressRematch();
+});
+$app.addEventListener('input', e => {
+  if (e.target.id === 'nameInput') lsSet(NAME_KEY, e.target.value.slice(0, 12));
+  if (e.target.id === 'bidInput') {
+    S.bidDraft = e.target.value.replace(/[^\d]/g, '');
+    const max = maxBidFor(S.V.points[me()]);
+    S.err = S.bidDraft !== '' && Number(S.bidDraft) > max ? 'それ以上は入札できません' : '';
+    render();
+  }
+});
+$app.addEventListener('change', e => {
+  if (e.target.id === 'modeSel' && S.role === 'host') set(ref(db, `${pathRoom()}/mode`), e.target.value).catch(err => console.warn(err));
+  if (e.target.id === 'autoRoll') { S.autoRoll = e.target.checked; scheduleAutoRoll(); }
+});
+$app.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  if (e.target.id === 'bidInput') submitBid();
+  if (e.target.id === 'codeInput') joinRoom(e.target.value.trim());
+});
+
+render();
+boot();
+</script>
+</body>
+</html>
