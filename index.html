@@ -53,6 +53,7 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.4),0 8px 30px rgba(0,0,0,.45)}
 h3{margin:0 0 10px;font-size:13px;color:var(--sub);letter-spacing:.16em;font-weight:600}
 .wait{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--sub)}
+.dots{display:inline-block;width:3em;text-align:left} /* 点が増えても横の文字が動かないよう幅を固定 */
 .dots::after{content:"";animation:dots 1.4s infinite steps(4)}
 @keyframes dots{0%{content:""}25%{content:"・"}50%{content:"・・"}75%{content:"・・・"}}
 
@@ -1483,10 +1484,10 @@ function viewBattle() {
     const turnInfo = nextT ? `ターン <b>${nextT.round}</b> / ${TURN_LIMIT} ・ <b class="${cls(nextT.role)}">${who(nextT.role)}</b>の番` : '';
     const firstInfo = `先攻: <b class="${cls(B.first)}">${who(B.first)}</b>${B.tied ? '(チップが同じなのでランダム)' : '(チップが少ない方)'}`;
     top = `<div class="turnline">${firstInfo}</div><div class="turnline">${turnInfo}</div>
-      <div class="row" style="margin-top:14px">
+      <div class="row" style="margin-top:14px;min-height:50px">
         ${myTurn ? `<button class="btn" data-act="roll" style="font-size:18px;padding:13px 30px">ダイスを振る</button>`
-               : `<div class="wait" style="color:inherit">${PB.busy ? 'ダイスが転がっています' : '相手が振るのを待っています'}<span class="dots"></span></div>`}
-        <label class="toggle"><input type="checkbox" id="autoRoll" ${S.autoRoll ? 'checked' : ''}> 自分の番は自動で振る</label></div>`;
+               : `<div class="wait" style="color:inherit">${PB.busy ? 'ダイスが転がっています' : '相手が振るのを待っています'}<span class="dots"></span></div>`}</div>
+      <label class="toggle" style="margin-top:10px"><input type="checkbox" id="autoRoll" ${S.autoRoll ? 'checked' : ''}> 自分の番は自動で振る</label>`;
   }
   return `<div class="tbl-head"><span>BATTLE</span><span>${shownAll && V.phase === 'result' ? 'GAME OVER' : ''}</span></div>
     <div class="arena"><div class="scene"><div class="cube ${cls(role)}" id="cube" style="--rollms:${ROLL_ANIM_MS}ms">${faces}</div></div><div>${top}</div></div>`;
