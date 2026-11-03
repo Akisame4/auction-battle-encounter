@@ -275,12 +275,12 @@ const POOLS = {
     { id: 'michizure',cat: '攻撃', name: '道連れ',     face: null, fx: [{ op: 'both', n: 6 }] },
     { id: 'kyushu',   cat: '攻撃', name: 'ライフ吸収', face: null, fx: [{ op: 'drain', n: 4, heal: 4 }] },
     { id: 'oiuchi',   cat: '攻撃', name: '追い打ち',   face: null, fx: [{ op: 'chase', hi: 10, lo: 3 }] },
+    { id: 'punch',    cat: '攻撃', name: 'パンチ',     face: null, fx: [{ op: 'dmg', n: 3 }] },
     { id: 'kaifuku',  cat: '回復・特殊', name: '回復',     face: null, fx: [{ op: 'heal', n: 5 }] },
-    { id: 'daikaifuku',cat:'回復・特殊', name: '大回復',   face: null, fx: [{ op: 'heal', n: 9 }] },
-    { id: 'barrier',  cat: '回復・特殊', name: 'バリア',   face: null, fx: [{ op: 'barrier', n: 1 }] },
+    { id: 'bogyo',    cat: '回復・特殊', name: '防御',     face: null, fx: [{ op: 'guard', n: 1, turns: 1 }] },
     { id: 'renzoku',  cat: '回復・特殊', name: '連続行動', face: null, fx: [{ op: 'chain' }] },
     { id: 'copy',     cat: '回復・特殊', name: 'コピー',   face: null, fx: [{ op: 'copy' }] },
-    { id: 'fuin',     cat: '回復・特殊', name: '封印',     face: null, fx: [{ op: 'seal' }] },
+    { id: 'kiai',     cat: '回復・特殊', name: '気合溜め', face: null, fx: [{ op: 'charge', n: 2 }] },
     { id: 'jisho',    cat: 'マイナス', name: '自傷',   face: null, fx: [{ op: 'selfdmg', n: 5 }] },
     { id: 'karaburi', cat: 'マイナス', name: '空振り', face: null, fx: [{ op: 'none' }] },
     { id: 'tento',    cat: 'マイナス', name: '転倒',   face: null, fx: [{ op: 'trip' }] },
@@ -289,7 +289,7 @@ const POOLS = {
     { id: 'twin',     cat: '面指定', name: 'ツインエッジ', face: 2, fx: [{ op: 'dmg', n: 6, hits: 2 }], fxOther: [{ op: 'dmg', n: 3 }] },
     { id: 'triple',   cat: '面指定', name: 'トリプルスリー', face: 3, fx: [{ op: 'dmg', n: 3, hits: 3 }], fxOther: [{ op: 'dmg', n: 3 }] },
     { id: 'senkoku',  cat: '面指定', name: '死の宣告',     face: 4, fx: [{ op: 'doom', n: 20, delay: 4 }], fxOther: [{ op: 'dmg', n: 4 }] },
-    { id: 'gogyo',    cat: '面指定', name: '五行の守り',   face: 5, fx: [{ op: 'barrier', n: 2 }, { op: 'heal', n: 5 }], fxOther: [{ op: 'heal', n: 5 }] },
+    { id: 'gogyo',    cat: '面指定', name: '五行の守り',   face: 5, fx: [{ op: 'guard', n: 1, turns: 99 }, { op: 'heal', n: 5 }], fxOther: [{ op: 'heal', n: 5 }] },
     { id: 'kaishin',  cat: '面指定', name: '会心の一撃',   face: 6, fx: [{ op: 'dmg', n: 14, pierce: true }], fxOther: [{ op: 'dmg', n: 4 }] },
   ],
   fuzake: null, // ふざけ版は未作成(UCが用意する)。用意されるまではガチ版のプールで代用する [仮]
@@ -308,13 +308,13 @@ for (const k in POOLS) for (const a of POOLS[k] || []) ABIL[a.id] = a;
 
 // [TEST] デバッグ用の調整値。{ '能力id~fx~0~n': 9 } の形で定義テーブルの数値を上書きする(値を決めたら削除する)
 // ゲーム開始時にホストの調整値を pub/start.tune に入れて配るので、両クライアントで同じ値になる
-const TUNE_KEYS = ['n', 'hits', 'ticks', 'p', 'heal', 'hi', 'lo', 'delay'];
+const TUNE_KEYS = ['n', 'hits', 'ticks', 'p', 'heal', 'hi', 'lo', 'delay', 'turns'];
 const BASE_FX = {};
 for (const id in ABIL) BASE_FX[id] = JSON.stringify({ fx: ABIL[id].fx, fxOther: ABIL[id].fxOther || null });
 function tuneValue(key, v) {
   v = Number(v);
   if (!Number.isFinite(v)) return null;
-  return key === 'p' ? Math.min(1, Math.max(0, Math.round(v * 100) / 100)) : Math.min(999, Math.max(key === 'hits' || key === 'ticks' || key === 'delay' ? 1 : 0, Math.round(v)));
+  return key === 'p' ? Math.min(1, Math.max(0, Math.round(v * 100) / 100)) : Math.min(999, Math.max(key === 'hits' || key === 'ticks' || key === 'delay' || key === 'turns' ? 1 : 0, Math.round(v)));
 }
 // 定義テーブルの元の値に調整値を重ねたものを返す(ABIL は書き換えない)
 function tunedFx(id, tune) {
@@ -333,17 +333,17 @@ function applyTune(tune) {
 }
 
 const FX_TEXT = {
-  dmg: f => (f.hits > 1 ? `${f.n}ダメージを${f.hits}回` : `${f.n}ダメージ`) + (f.pierce ? '、バリア貫通' : ''),
+  dmg: f => (f.hits > 1 ? `${f.n}ダメージを${f.hits}回` : `${f.n}ダメージ`) + (f.pierce ? '、防御貫通' : ''),
   heal: f => `自分が${f.n}回復`,
   poison: f => `相手に毎ターン${f.n}ダメージ、${f.ticks}ターン`,
   gamble: f => `${f.n}ダメージ、コインが裏なら外れ` + (f.p !== 0.5 ? `(表は${Math.round(f.p * 100)}%)` : ''),
   both: f => `自分も相手も${f.n}ダメージ`,
   drain: f => `${f.n}ダメージ、自分も${f.heal}回復`,
   chase: f => `相手ライフ半分以下なら${f.hi}、それ以外は${f.lo}ダメージ`,
-  barrier: f => f.n > 1 ? `バリアを${f.n}回分張る` : '次に受けるダメージを1回だけ0にする',
+  guard: f => f.turns > 1 ? `相手の番${f.turns}回のあいだ、受けるダメージを${f.n}回だけ0にする` : `相手の次の番に受けるダメージを${f.n}回だけ0にする`,
   chain: () => '出たらもう一度振れる',
   copy: () => '相手が直前に出した面の効果を使う',
-  seal: () => '相手の次の出目を無効にする',
+  charge: f => `自分の次の番、相手に与えるダメージが${f.n}倍`,
   selfdmg: f => `自分が${f.n}ダメージ`,
   none: () => '何も起きない',
   trip: () => '自分の次の出目が無効になる',
@@ -482,16 +482,17 @@ function derive(pub, rev) {
 // 1ターン = 両者が1回ずつ振る。ログの1要素(turns[i])は片方の手番。
 function simulate(dice, points, rng) {
   const P = {};
-  for (const r of ['host', 'guest']) P[r] = { life: points[r], max: points[r], barrier: 0, poisons: [], dooms: [], nullify: 0, lastFace: null };
+  for (const r of ['host', 'guest']) P[r] = { life: points[r], max: points[r], guard: 0, guardTurns: 0, charge: 0, power: 0, poisons: [], dooms: [], nullify: 0, lastFace: null };
   const tied = points.host === points.guest;
   const first = tied ? (rng() < 0.5 ? 'host' : 'guest') : (points.host < points.guest ? 'host' : 'guest');
   const turns = [];
   let result = null;
+  let actor = null; // いま手番の人(防御は相手の番に受けるダメージだけを防ぐ)
 
   const snap = () => {
     const s = {};
     for (const r in P) s[r] = {
-      life: P[r].life, barrier: P[r].barrier, nullify: P[r].nullify,
+      life: P[r].life, guard: P[r].guard, guardTurns: P[r].guardTurns, charge: P[r].charge, power: P[r].power, nullify: P[r].nullify,
       poison: P[r].poisons.reduce((x, p) => x + p.left, 0),
       doom: P[r].dooms.length ? Math.min(...P[r].dooms.map(d => d.left)) : 0,
     };
@@ -505,7 +506,12 @@ function simulate(dice, points, rng) {
     return null;
   };
   const hit = (t, n, pierce, L) => {
-    if (!pierce && P[t].barrier > 0) { P[t].barrier--; L.push(`${R(t)}のバリアが${n}ダメージを防いだ`); return; }
+    const pw = t !== actor ? P[actor].power : 0; // 気合溜め: 手番の人が相手に与えるダメージだけ倍になる
+    if (pw > 1) { n *= pw; L.push(`気合で${pw}倍!`); }
+    if (!pierce && t !== actor && P[t].guard > 0) {
+      P[t].guard--; if (!P[t].guard) P[t].guardTurns = 0;
+      L.push(`${R(t)}の防御が${n}ダメージを防いだ`); return;
+    }
     P[t].life -= n; L.push(`${R(t)}に${n}ダメージ`);
   };
   const heal = (t, n, L) => {
@@ -525,9 +531,9 @@ function simulate(dice, points, rng) {
         case 'both': hit(me, f.n, false, L); hit(op, f.n, false, L); break;
         case 'drain': hit(op, f.n, false, L); heal(me, f.heal, L); break;
         case 'chase': hit(op, P[op].life * 2 <= P[op].max ? f.hi : f.lo, false, L); break;
-        case 'barrier':
-          if (P[me].barrier >= f.n) L.push(`${R(me)}はすでにバリアがあるので効果なし`);
-          else { P[me].barrier = f.n; L.push(`${R(me)}がバリアを張った${f.n > 1 ? `(${f.n}回分)` : ''}`); }
+        case 'guard': // 重ねたときは、回数も残りの番の数も多いほうを残す
+          P[me].guard = Math.max(P[me].guard, f.n); P[me].guardTurns = Math.max(P[me].guardTurns, f.turns);
+          L.push(`${R(me)}が防御の構え(${P[me].guardTurns > 1 ? `相手の番${P[me].guardTurns}回のあいだ` : '相手の次の番'})`);
           break;
         case 'chain': ctx.chain = true; L.push('もう一度振る!'); break;
         case 'copy': {
@@ -539,7 +545,7 @@ function simulate(dice, points, rng) {
           resolve(me, cid, lf, L, ctx, depth + 1);
           break;
         }
-        case 'seal': P[op].nullify++; L.push(`${R(op)}の次の出目を封印`); break;
+        case 'charge': P[me].charge = Math.max(P[me].charge, f.n); L.push(`${R(me)}が気合を溜めた(次の番の攻撃が${P[me].charge}倍)`); break;
         case 'selfdmg': hit(me, f.n, false, L); break;
         case 'none': L.push('何も起きない'); break;
         case 'trip': P[me].nullify++; L.push(`${R(me)}は転んだ(次の出目が無効)`); break;
@@ -552,6 +558,8 @@ function simulate(dice, points, rng) {
   outer:
   for (let t = 0; t < TURN_LIMIT * 2; t++) {
     const me = t % 2 === 0 ? first : other(first);
+    actor = me;
+    P[me].power = P[me].charge; P[me].charge = 0; // 前の番に溜めた気合はこの番だけ効く
     const T = { role: me, round: Math.floor(t / 2) + 1, steps: [] };
     turns.push(T);
     // ターン開始時の処理(毒・死の宣告)
@@ -578,6 +586,10 @@ function simulate(dice, points, rng) {
       if ((result = judge())) break outer;
       if (!ctx.chain) break;
     }
+    // 番の終わり: 気合はこの番で切れる。相手の防御は「相手の番」を1回終えたので残りを減らす
+    P[me].power = 0;
+    const o = P[other(me)];
+    if (o.guardTurns > 0 && --o.guardTurns === 0) o.guard = 0;
   }
   if (!result) {
     const h = P.host.life, g = P.guest.life;
@@ -965,7 +977,7 @@ function soundWatch(V) {
   if (p.phase !== 'battle' && V.phase === 'battle' && V.need.by === me() && V.rolled === 0) setTimeout(() => play('turn', { gain: 0.6 }), 400);
 }
 function stepSound(prev, st) {
-  if (st.lines.some(l => l.includes('バリアが'))) play('barrier', { gain: 0.7 });
+  if (st.lines.some(l => l.includes('防御が'))) play('barrier', { gain: 0.7 });
   for (const r of ['host', 'guest']) {
     const d = st.snap[r].life - prev[r].life;
     if (d < 0) play('hit', { gain: r === me() ? 1 : 0.75 });
@@ -1141,7 +1153,9 @@ function viewSeat(r) {
   const badges = [];
   if (inBattle) {
     const s = snap[r];
-    if (s.barrier) badges.push(`🛡 バリア×${s.barrier}`);
+    if (s.guard) badges.push(`🛡 防御${s.guard > 1 ? '×' + s.guard : ''}${s.guardTurns > 1 ? ` 相手の番あと${s.guardTurns}回` : ''}`);
+    if (s.charge) badges.push(`🔥 気合 次の番の攻撃×${s.charge}`);
+    if (s.power) badges.push(`🔥 攻撃×${s.power}`);
     if (s.poison) badges.push(`☠ 毒 残り${s.poison}`);
     if (s.doom) badges.push(`💀 宣告 あと${s.doom}`);
     if (s.nullify) badges.push(`🚫 次の出目が無効${s.nullify > 1 ? '×' + s.nullify : ''}`);
@@ -1384,8 +1398,8 @@ function toast(msg) {
 }
 
 // ---------------- [TEST] デバッグ: 能力一覧と数値調整 ----------------
-const PARAM_LABEL = { hits: '回数', ticks: 'ターン数', p: '表の確率', heal: '回復', hi: '半分以下', lo: 'それ以外', delay: '何ターン後' };
-const N_LABEL = { dmg: 'ダメージ', heal: '回復', poison: '毎ターン', gamble: 'ダメージ', both: 'ダメージ', drain: 'ダメージ', barrier: '回数', selfdmg: 'ダメージ', rampage: '自分へ', doom: 'ダメージ' };
+const PARAM_LABEL = { turns: '相手の番の数', hits: '回数', ticks: 'ターン数', p: '表の確率', heal: '回復', hi: '半分以下', lo: 'それ以外', delay: '何ターン後' };
+const N_LABEL = { dmg: 'ダメージ', heal: '回復', poison: '毎ターン', gamble: 'ダメージ', both: 'ダメージ', drain: 'ダメージ', guard: '防ぐ回数', charge: '倍率', selfdmg: 'ダメージ', rampage: '自分へ', doom: 'ダメージ' };
 const paramLabel = (op, key) => key === 'n' ? (N_LABEL[op] || '数値') : PARAM_LABEL[key];
 const dbgEl = document.getElementById('dbg');
 let dbgOpen = false;
