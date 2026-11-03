@@ -205,12 +205,34 @@ button.chip:hover:not(:disabled){transform:translateY(-3px)} button.chip{transit
 .float.dmg{color:#ff7a66} .float.heal{color:#8be0a8}
 @keyframes floatup{0%{transform:translate(-50%,0);opacity:0}15%{opacity:1}100%{transform:translate(-50%,-60px);opacity:0}}
 .sefab{position:fixed;right:14px;bottom:14px;z-index:40;background:rgba(10,20,14,.85);font-size:12px;padding:7px 14px}
+/* [TEST] debug panel */
+.dbgfab{position:fixed;left:14px;bottom:14px;z-index:40;background:rgba(10,20,14,.85);font-size:12px;padding:7px 14px}
+.dbg{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.6);display:flex;justify-content:center;align-items:flex-start;padding:24px 12px;overflow:auto}
+.dbg[hidden]{display:none}
+.dbg .box{background:#0f1c14;border:1px solid var(--gold2);border-radius:14px;padding:16px;width:min(980px,100%)}
+.dbg .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.dbg h3{margin:0;font-size:16px;color:var(--gold-hi);letter-spacing:.1em}
+.dbg .note{font-size:12px;color:var(--sub);line-height:1.6;margin-bottom:10px}
+.dbg table{width:100%;border-collapse:collapse;font-size:13px}
+.dbg th{text-align:left;font-size:11px;color:var(--sub);font-weight:400;padding:4px 6px;border-bottom:1px solid var(--line)}
+.dbg td{padding:6px;border-bottom:1px solid rgba(216,180,90,.16);vertical-align:top}
+.dbg td.nm{font-weight:800;white-space:nowrap}
+.dbg td.nm small{display:block;font-weight:400;font-size:11px;color:var(--sub)}
+.dbg .prm{display:inline-flex;align-items:center;gap:4px;margin:0 10px 4px 0;font-size:11.5px;color:var(--sub)}
+.dbg .prm .fside{color:var(--gold)}
+.dbg .prm input{width:58px;padding:3px 6px;font-size:13px;border-radius:6px}
+.dbg .prm.chg input{border-color:var(--gold-hi);background:rgba(241,213,138,.15);color:var(--gold-hi)}
+.dbg .prm .was{font-size:10.5px;color:var(--gold)}
+.dbg td.ds{font-size:11.5px;color:var(--sub);line-height:1.5;min-width:220px}
+.dbg textarea{width:100%;height:160px;font-size:12px;margin-top:10px;background:#08110c;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1a140a;border:1px solid var(--gold2);padding:10px 16px;border-radius:12px;z-index:70;max-width:90vw}
 </style>
 </head>
 <body>
 <div class="wrap" id="app"></div>
 <button id="muteBtn" class="ghost sefab" type="button">🔊 音あり</button>
+<button id="dbgBtn" class="ghost dbgfab" type="button" hidden>能力一覧(デバッグ)</button><!-- [TEST] -->
+<div id="dbg" class="dbg" hidden></div><!-- [TEST] -->
 
 <script type="module">
 // =====================================================================
@@ -284,11 +306,37 @@ function getPool(mode) {
 const ABIL = {};
 for (const k in POOLS) for (const a of POOLS[k] || []) ABIL[a.id] = a;
 
+// [TEST] デバッグ用の調整値。{ '能力id~fx~0~n': 9 } の形で定義テーブルの数値を上書きする(値を決めたら削除する)
+// ゲーム開始時にホストの調整値を pub/start.tune に入れて配るので、両クライアントで同じ値になる
+const TUNE_KEYS = ['n', 'hits', 'ticks', 'p', 'heal', 'hi', 'lo', 'delay'];
+const BASE_FX = {};
+for (const id in ABIL) BASE_FX[id] = JSON.stringify({ fx: ABIL[id].fx, fxOther: ABIL[id].fxOther || null });
+function tuneValue(key, v) {
+  v = Number(v);
+  if (!Number.isFinite(v)) return null;
+  return key === 'p' ? Math.min(1, Math.max(0, Math.round(v * 100) / 100)) : Math.min(999, Math.max(key === 'hits' || key === 'ticks' || key === 'delay' ? 1 : 0, Math.round(v)));
+}
+// 定義テーブルの元の値に調整値を重ねたものを返す(ABIL は書き換えない)
+function tunedFx(id, tune) {
+  const t = JSON.parse(BASE_FX[id]);
+  for (const k in tune || {}) {
+    const [kid, side, i, key] = k.split('~');
+    const f = kid === id && (side === 'fx' || side === 'fxOther') ? t[side]?.[i] : null;
+    if (!f || !TUNE_KEYS.includes(key) || !(key in f)) continue;
+    const v = tuneValue(key, tune[k]);
+    if (v != null) f[key] = v;
+  }
+  return t;
+}
+function applyTune(tune) {
+  for (const id in ABIL) { const t = tunedFx(id, tune); ABIL[id].fx = t.fx; if (t.fxOther) ABIL[id].fxOther = t.fxOther; }
+}
+
 const FX_TEXT = {
   dmg: f => (f.hits > 1 ? `${f.n}ダメージを${f.hits}回` : `${f.n}ダメージ`) + (f.pierce ? '、バリア貫通' : ''),
   heal: f => `自分が${f.n}回復`,
   poison: f => `相手に毎ターン${f.n}ダメージ、${f.ticks}ターン`,
-  gamble: f => `${f.n}ダメージ、コインが裏なら外れ`,
+  gamble: f => `${f.n}ダメージ、コインが裏なら外れ` + (f.p !== 0.5 ? `(表は${Math.round(f.p * 100)}%)` : ''),
   both: f => `自分も相手も${f.n}ダメージ`,
   drain: f => `${f.n}ダメージ、自分も${f.heal}回復`,
   chase: f => `相手ライフ半分以下なら${f.hi}、それ以外は${f.lo}ダメージ`,
@@ -550,6 +598,11 @@ import { getDatabase, ref, set, get, update, remove, onValue, onDisconnect, serv
 
 // [TEST] ?emu をつけるとローカルの Firebase エミュレータにつなぐ(開発用)
 const EMU = new URLSearchParams(location.search).has('emu');
+// [TEST] ?debug をつけると能力一覧と数値調整のパネルが出る
+const DEBUG = new URLSearchParams(location.search).has('debug');
+const TUNE_KEY = 'diceauction_tune_v1';
+let localTune = {};
+try { localTune = JSON.parse(lsGet(TUNE_KEY) || '{}') || {}; } catch { localTune = {}; }
 const config = EMU
   ? { apiKey: 'demo-key', projectId: 'demo-dice-auction', databaseURL: 'http://127.0.0.1:9000?ns=demo-dice-auction-default-rtdb' } // [TEST]
   : FIREBASE_CONFIG;
@@ -704,6 +757,7 @@ function onGameData() {
     if (f.host && f.guest && !S.sec[key] && !S.fetching.has(key)) fetchSecret(key);
     else if (f[me()] && S.mySec[key] == null && !S.fetching.has('my:' + key)) fetchMySecret(key); // 再読み込み後に自分の入札額を表示するため
   }
+  applyTune(S.pub.start.tune); // [TEST] 調整値なしなら定義テーブルの値に戻る
   S.V = derive(S.pub, rev);
   if (S.V.phase !== 'pick') S.pickSel = null;
   if (S.V.need?.bid !== S.bidKey) { S.bidKey = S.V.need?.bid; S.bidDraft = ''; S.err = ''; }
@@ -788,14 +842,19 @@ async function maybeStartRematch() {
   if (!rm?.host || !rm?.guest || rematchStarting) return;
   rematchStarting = true;
   const next = S.g + 1;
-  try { await update(ref(db, pathRoom()), { cur: next, [`games/${next}/pub/start`]: { mode: S.room.mode, at: serverTimestamp() } }); }
+  try { await update(ref(db, pathRoom()), { cur: next, [`games/${next}/pub/start`]: startData() }); }
   catch (e) { console.warn(e); }
   rematchStarting = false;
+}
+function startData() {
+  const d = { mode: S.room.mode, at: serverTimestamp() };
+  if (DEBUG && Object.keys(localTune).length) d.tune = { ...localTune }; // [TEST]
+  return d;
 }
 async function startGame() {
   if (S.role !== 'host' || !S.room.players.guest) return;
   const next = S.room.cur == null ? 0 : S.room.cur + 1;
-  try { await update(ref(db, pathRoom()), { cur: next, [`games/${next}/pub/start`]: { mode: S.room.mode, at: serverTimestamp() } }); }
+  try { await update(ref(db, pathRoom()), { cur: next, [`games/${next}/pub/start`]: startData() }); }
   catch (e) { toast('開始できませんでした'); console.warn(e); }
 }
 
@@ -951,7 +1010,8 @@ function patch(el, html) {
 }
 
 function header(extra = '') {
-  return `<header><div class="logo">DICE AUCTION<small>ダイスオークション(仮)</small></div>${extra}<div class="spacer"></div>
+  const tuned = S.screen === 'game' && S.pub?.start?.tune ? '<span class="tag" title="ホストのデバッグ調整値で対戦中">調整値あり</span>' : ''; // [TEST]
+  return `<header><div class="logo">DICE AUCTION<small>ダイスオークション(仮)</small></div>${extra}${tuned}<div class="spacer"></div>
     ${S.code ? `<span class="tag">ROOM ${esc(S.code)}</span><button class="ghost" data-act="leave">退出</button>` : ''}</header>`;
 }
 
@@ -1321,6 +1381,85 @@ function toast(msg) {
   let el = document.querySelector('.toast');
   if (!el) { el = document.createElement('div'); el.className = 'toast'; document.body.appendChild(el); }
   el.textContent = msg; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.remove(), 2500);
+}
+
+// ---------------- [TEST] デバッグ: 能力一覧と数値調整 ----------------
+const PARAM_LABEL = { hits: '回数', ticks: 'ターン数', p: '表の確率', heal: '回復', hi: '半分以下', lo: 'それ以外', delay: '何ターン後' };
+const N_LABEL = { dmg: 'ダメージ', heal: '回復', poison: '毎ターン', gamble: 'ダメージ', both: 'ダメージ', drain: 'ダメージ', barrier: '回数', selfdmg: 'ダメージ', rampage: '自分へ', doom: 'ダメージ' };
+const paramLabel = (op, key) => key === 'n' ? (N_LABEL[op] || '数値') : PARAM_LABEL[key];
+const dbgEl = document.getElementById('dbg');
+let dbgOpen = false;
+
+function dbgDesc(a) {
+  const t = tunedFx(a.id, localTune);
+  return a.face ? `${a.face}の面: ${fxText(t.fx)} / ほかの面: ${fxText(t.fxOther)}` : fxText(t.fx);
+}
+function dbgParams(a) {
+  const base = JSON.parse(BASE_FX[a.id]), t = tunedFx(a.id, localTune);
+  const out = [];
+  for (const side of ['fx', 'fxOther']) (t[side] || []).forEach((f, i) => {
+    for (const key of TUNE_KEYS) if (key in f) {
+      const k = `${a.id}~${side}~${i}~${key}`, was = base[side][i][key], chg = f[key] !== was;
+      const sideLabel = a.face ? (side === 'fx' ? `${a.face}の面 ` : 'ほか ') : '';
+      out.push(`<label class="prm ${chg ? 'chg' : ''}"><span><span class="fside">${sideLabel}</span>${esc(paramLabel(f.op, key))}</span>
+        <input type="number" data-k="${k}" value="${f[key]}" min="0" ${key === 'p' ? 'step="0.05" max="1"' : 'step="1"'}>${chg ? `<span class="was">元${was}</span>` : ''}</label>`);
+    }
+  });
+  return out.join('') || '<span class="muted" style="font-size:11.5px">数値なし</span>';
+}
+function renderDbg() {
+  if (!dbgOpen) { dbgEl.hidden = true; return; }
+  const ingame = S.screen === 'game' && S.pub?.start;
+  const rows = Object.entries(POOLS).filter(([, pool]) => pool).map(([k, pool]) => `
+    <tr><th colspan="3" style="color:var(--gold);font-size:12px;padding-top:12px">プール: ${esc(k)}(${pool.length}個)</th></tr>
+    <tr><th>能力</th><th>数値</th><th>いまの効果</th></tr>
+    ${pool.map(a => `<tr data-id="${a.id}"><td class="nm">${SUIT[a.cat] || ''} ${esc(a.name)}<small>${esc(a.cat)}${a.face ? ` / ${a.face}の面で本領` : ''}</small></td>
+      <td class="pr">${dbgParams(a)}</td><td class="ds">${esc(dbgDesc(a))}</td></tr>`).join('')}`).join('');
+  const n = Object.keys(localTune).length;
+  dbgEl.innerHTML = `<div class="box">
+    <div class="top"><h3>能力一覧(デバッグ)</h3><span class="tag">変更 ${n}件</span><div class="spacer" style="flex:1"></div>
+      <button class="ghost" data-dbg="export">変更点を書き出す</button><button class="ghost" data-dbg="reset" ${n ? '' : 'disabled'}>全部元に戻す</button><button class="btn" data-dbg="close" style="padding:8px 18px">閉じる</button></div>
+    <div class="note">数値はこのブラウザに保存されます。ゲーム開始(再戦を含む)のとき、ホストの調整値が相手にも配られて、その対戦はその値で進みます。
+      ${ingame ? '<br><b style="color:var(--gold-hi)">いまの対戦には反映されません。次のゲームから反映されます。</b>' : ''}
+      ${ingame && S.pub.start.tune ? `<br>いまの対戦はホストの調整値(${Object.keys(S.pub.start.tune).length}件)で進んでいます。` : ''}</div>
+    <table>${rows}</table>
+    <textarea id="dbgOut" readonly hidden></textarea></div>`;
+  dbgEl.hidden = false;
+}
+function dbgExport() {
+  const lines = [];
+  for (const k in localTune) {
+    const [id, side, i, key] = k.split('~'), a = ABIL[id];
+    if (!a) continue;
+    const base = JSON.parse(BASE_FX[id])[side][i];
+    const where = a.face ? (side === 'fx' ? `${a.face}の面の` : 'ほかの面の') : '';
+    lines.push(`${a.name}: ${where}${paramLabel(base.op, key)} ${base[key]} → ${tuneValue(key, localTune[k])}`);
+  }
+  const out = document.getElementById('dbgOut');
+  out.value = lines.length ? `${lines.join('\n')}\n\n${JSON.stringify(localTune)}` : '変更はありません';
+  out.hidden = false; out.select();
+  navigator.clipboard?.writeText(out.value).then(() => toast('クリップボードにコピーしました'), () => {});
+}
+if (DEBUG) {
+  const btn = document.getElementById('dbgBtn');
+  btn.hidden = false;
+  btn.addEventListener('click', () => { dbgOpen = true; renderDbg(); });
+  dbgEl.addEventListener('click', e => {
+    if (e.target === dbgEl) { dbgOpen = false; renderDbg(); return; }
+    const act = e.target.closest('[data-dbg]')?.dataset.dbg;
+    if (act === 'close') { dbgOpen = false; renderDbg(); }
+    else if (act === 'reset') { localTune = {}; lsSet(TUNE_KEY, null); renderDbg(); }
+    else if (act === 'export') dbgExport();
+  });
+  dbgEl.addEventListener('change', e => {
+    const k = e.target.dataset.k; if (!k) return;
+    const [id, side, i, key] = k.split('~');
+    const was = JSON.parse(BASE_FX[id])[side][i][key], v = tuneValue(key, e.target.value);
+    if (v == null || v === was) delete localTune[k]; else localTune[k] = v;
+    lsSet(TUNE_KEY, Object.keys(localTune).length ? JSON.stringify(localTune) : null);
+    const y = dbgEl.scrollTop;
+    renderDbg(); dbgEl.scrollTop = y;
+  });
 }
 
 // ---------------- 操作 ----------------
