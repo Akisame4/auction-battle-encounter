@@ -7,6 +7,7 @@
 <meta name="description" content="能力を競り落としてダイスに書き込み、完成したダイスで戦う2人対戦のブラウザゲーム">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='6' width='52' height='52' rx='12' fill='%23f2c14e'/%3E%3Ccircle cx='20' cy='20' r='5' fill='%23141824'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23141824'/%3E%3Ccircle cx='44' cy='44' r='5' fill='%23141824'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Cinzel:wght@700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -225,6 +226,31 @@ button.chip:hover:not(:disabled){transform:translateY(-3px)} button.chip{transit
 .dbg .prm .was{font-size:10.5px;color:var(--gold)}
 .dbg td.ds{font-size:11.5px;color:var(--sub);line-height:1.5;min-width:220px}
 .dbg textarea{width:100%;height:160px;font-size:12px;margin-top:10px;background:#08110c;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px}
+/* 立体ダイスの演出と、出た技の表示 */
+#stage{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:55;opacity:0;transition:opacity .35s}
+.skillban{position:fixed;left:50%;top:60%;transform:translate(-50%,0);z-index:58;pointer-events:none;min-width:min(420px,92vw);max-width:92vw;text-align:center;
+  background:linear-gradient(180deg,rgba(18,30,22,.96),rgba(8,16,11,.96));border:2px solid var(--gold);border-radius:16px;padding:12px 22px 14px;box-shadow:0 12px 40px rgba(0,0,0,.7);animation:bannerIn .28s cubic-bezier(.2,1.4,.4,1)}
+.skillban.out{animation:bannerOut .3s forwards}
+.skillban.me{border-color:var(--me)} .skillban.op{border-color:var(--op)}
+.skillban .bw{font-size:13px;letter-spacing:.14em;color:var(--sub)}
+.skillban.me .bw b{color:var(--me)} .skillban.op .bw b{color:var(--op)}
+.skillban .bn{font-size:34px;font-weight:800;line-height:1.25;color:var(--gold-hi);text-shadow:0 2px 10px rgba(0,0,0,.6);margin:2px 0}
+.skillban .bn.tick{font-size:26px}
+.skillban .bn.invalid{color:var(--sub);text-decoration:line-through}
+.skillban .be{font-size:13px;color:var(--sub);margin-bottom:6px}
+.skillban .bl{font-size:16px;line-height:1.6;border-top:1px solid rgba(216,180,90,.3);padding-top:6px}
+@keyframes bannerIn{from{opacity:0;transform:translate(-50%,16px) scale(.85)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes bannerOut{to{opacity:0;transform:translate(-50%,-10px)}}
+/* 2人の状態 */
+.status{margin-top:10px;background:rgba(0,0,0,.28);border-radius:10px;padding:6px 9px}
+.status h5{margin:0 0 2px;font-size:11px;letter-spacing:.14em;font-weight:800;color:var(--sub)}
+.status .st{display:grid;grid-template-columns:22px 1fr;gap:4px;align-items:start;font-size:12.5px;line-height:1.45;padding:3px 0}
+.status .st .ic{font-size:15px;text-align:center}
+.status .st b{color:var(--gold-hi)}
+.status .st small{display:block;color:var(--sub);font-size:11px}
+.status .none{font-size:12px;color:var(--dim);padding:3px 0}
+.status .st.new{animation:stNew 1.2s ease-out}
+@keyframes stNew{0%{background:rgba(241,213,138,.35)}100%{background:transparent}}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1a140a;border:1px solid var(--gold2);padding:10px 16px;border-radius:12px;z-index:70;max-width:90vw}
 </style>
 </head>
@@ -245,8 +271,8 @@ const FACES = 6;               // ダイスの面数
 const TURN_LIMIT = 50;         // このターン数で決着しなければ残りライフが多い方の勝ち(1ターン=両者が1回ずつ振る)
 const CHAIN_MAX = 3;           // 連続行動で追加で振れる回数の上限(1ターン内)
 const SHOW_TIE_AMOUNT = true;  // 同額だったとき、再入札の前にその金額を見せる
-const ROLL_ANIM_MS = 900;      // ダイスが転がる演出の長さ
-const STEP_GAP_MS = 500;       // 演出の各ステップのあいだの待ち時間
+const ROLL_ANIM_MS = 900;      // ダイスが転がる演出の長さ(立体ダイスが使えないときの代わりの演出)
+const BANNER_MS = 1500;        // 出た技の名前と効果を見せる時間
 const AUTO_ROLL_DELAY_MS = 700;
 
 // Firebase の設定(UCが作成したプロジェクトの値を入れる)
@@ -493,8 +519,8 @@ function simulate(dice, points, rng) {
     const s = {};
     for (const r in P) s[r] = {
       life: P[r].life, guard: P[r].guard, guardTurns: P[r].guardTurns, charge: P[r].charge, power: P[r].power, nullify: P[r].nullify,
-      poison: P[r].poisons.reduce((x, p) => x + p.left, 0),
-      doom: P[r].dooms.length ? Math.min(...P[r].dooms.map(d => d.left)) : 0,
+      poisons: P[r].poisons.map(p => ({ n: p.n, left: p.left })),
+      dooms: P[r].dooms.map(d => ({ n: d.n, left: d.left })),
     };
     return s;
   };
@@ -870,6 +896,134 @@ async function startGame() {
   catch (e) { toast('開始できませんでした'); console.warn(e); }
 }
 
+// ---------------- 立体ダイス(サイトリーの演出を流用) ----------------
+// three.js が読めない環境では null → 卓の中の CSS のキューブで代用する
+//  - roll(dieIds, face, mine): 画面全体にダイスを投げ、face の面を上にして着地したら resolve(ダイスは clear() まで残す)
+const DGL = (() => {
+  if (typeof THREE === 'undefined') return null;
+  try {
+    const V3 = THREE.Vector3, Q = THREE.Quaternion;
+    // BoxGeometry の面の順(+x,-x,+y,-y,+z,-z)に、どの目を貼るか。向かい合う目の和は7
+    const FACE_OF_MAT = [2, 5, 3, 4, 1, 6];
+    // その目を上(+z)に向ける回転
+    const UP = {
+      1: new Q(),
+      6: new Q().setFromAxisAngle(new V3(1, 0, 0), Math.PI),
+      2: new Q().setFromAxisAngle(new V3(0, 1, 0), -Math.PI / 2),
+      5: new Q().setFromAxisAngle(new V3(0, 1, 0), Math.PI / 2),
+      3: new Q().setFromAxisAngle(new V3(1, 0, 0), Math.PI / 2),
+      4: new Q().setFromAxisAngle(new V3(1, 0, 0), -Math.PI / 2),
+    };
+    // 面を上に向けたあと、文字が手前から読める向きにそろえる(z軸まわりの補正)
+    const SPIN = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: Math.PI };
+    function faceMat(f, id, mine) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+      const x = cv.getContext('2d');
+      const g = x.createRadialGradient(90, 80, 20, 128, 128, 200); g.addColorStop(0, '#fffaf0'); g.addColorStop(1, '#e6dabd');
+      x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+      x.strokeStyle = '#b89b52'; x.lineWidth = 10; x.strokeRect(5, 5, 246, 246);
+      x.fillStyle = mine ? '#8a6a2a' : '#a0261c'; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.font = '700 86px Cinzel, serif'; x.fillText(String(f), 128, 82);
+      const name = ABIL[id]?.name || '';
+      x.fillStyle = '#1d140a';
+      let size = 40; x.font = `800 ${size}px "Shippori Mincho B1", serif`;
+      while (x.measureText(name).width > 226 && size > 18) { size -= 2; x.font = `800 ${size}px "Shippori Mincho B1", serif`; }
+      x.fillText(name, 128, 178);
+      const t = new THREE.CanvasTexture(cv); t.anisotropy = 4;
+      return new THREE.MeshStandardMaterial({ map: t, roughness: .45, metalness: 0 });
+    }
+    const R = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    const cv = R.domElement; cv.id = 'stage'; document.body.appendChild(cv);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0xffffff, .75));
+    const d1 = new THREE.DirectionalLight(0xffffff, .6); d1.position.set(-.5, -.6, 1); scene.add(d1);
+    const d2 = new THREE.DirectionalLight(0xffe2b0, .25); d2.position.set(.8, .5, .3); scene.add(d2);
+    const geo = new THREE.BoxGeometry(1, 1, 1), edges = new THREE.EdgesGeometry(geo);
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0x6b5523, transparent: true, opacity: .6 });
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.75, 24), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: .3, depthWrite: false }));
+    const TH = Math.PI / 6.4, COSA = Math.cos(TH), easeOut = u => 1 - Math.pow(1 - u, 3);
+    let die = null, dieKey = null, raf = 0;
+    function build(ids, mine) {
+      const key = ids.join(',') + '|' + mine;
+      if (key === dieKey) return die;
+      if (die) { scene.remove(die); die.children[0].material.forEach(m => { m.map.dispose(); m.dispose(); }); }
+      const grp = new THREE.Group();
+      grp.add(new THREE.Mesh(geo, FACE_OF_MAT.map(f => faceMat(f, ids[f - 1], mine))));
+      grp.add(new THREE.LineSegments(edges, edgeMat));
+      dieKey = key; return die = grp;
+    }
+    function roll(ids, face, mine) {
+      return new Promise(resolve => {
+        cancelAnimationFrame(raf);
+        const W = innerWidth, H = innerHeight;
+        R.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); R.setSize(W, H, false);
+        const cam = new THREE.OrthographicCamera(-W / 2, W / 2, H / 2, -H / 2, -4000, 4000);
+        cam.position.set(0, -Math.sin(TH) * 1000, Math.cos(TH) * 1000); cam.lookAt(0, 0, 0);
+        const S = Math.max(90, Math.min(150, Math.min(W, H) / 4.6));
+        const d = build(ids, mine);
+        if (!d.parent) scene.add(d);
+        if (!shadow.parent) scene.add(shadow);
+        const qFinal = new Q().setFromAxisAngle(new V3(0, 0, 1), SPIN[face] + (Math.random() - .5) * 0.35).multiply(UP[face]);
+        // 自分のダイスは手前から、相手のダイスは奥から投げ込む
+        const it = {
+          x0: (Math.random() - .5) * W * .4, y0: (mine ? -1 : 1) * ((H / 2) / COSA + 160),
+          x1: (Math.random() - .5) * S * .4, y1: H * .16, T: 1.15 + Math.random() * .3,
+          axis: new V3(Math.random() - .5, Math.random() - .5, Math.random() - .5).normalize(), A0: (5 + Math.random() * 5) * Math.PI,
+          zMax: S * 3.6, nb: 3, hit: 0,
+        };
+        d.scale.setScalar(S);
+        cv.style.opacity = 1;
+        const t0 = performance.now(), tmp = new Q();
+        const frame = now => {
+          const u = Math.min(1, Math.max(0, (now - t0) / 1000 / it.T)), e = easeOut(u);
+          const h = u >= 1 ? 0 : it.zMax * Math.pow(1 - u, 2) * Math.abs(Math.cos(Math.PI * it.nb * u));
+          d.position.set(it.x0 + (it.x1 - it.x0) * e, it.y0 + (it.y1 - it.y0) * e, S / 2 + h);
+          tmp.setFromAxisAngle(it.axis, it.A0 * (1 - e)); d.quaternion.copy(tmp).multiply(qFinal);
+          shadow.position.set(d.position.x, d.position.y, .5);
+          shadow.scale.setScalar(S * (1.05 - Math.min(.5, h / (S * 9))));
+          shadow.material.opacity = .34 / (1 + h / (S * 2.5));
+          if (u > 0 && u < 1 && it.hit < it.nb && u >= (it.hit + .5) / it.nb) { play('roll', { gain: Math.pow(1 - u, 1.2) * .6 + .15, rate: 1.1 + Math.random() * .2 }); it.hit++; }
+          R.render(scene, cam);
+          if (u < 1) raf = requestAnimationFrame(frame); else resolve();
+        };
+        raf = requestAnimationFrame(frame);
+      });
+    }
+    function clear() { cv.style.opacity = 0; }
+    return { roll, clear };
+  } catch (e) { console.warn('[DGL] disabled:', e); return null; }
+})();
+
+// 出た技の名前と、起きたことを画面の中央に出す
+function showBanner(role, st) {
+  hideBanner(true);
+  const el = document.createElement('div');
+  el.className = `skillban ${cls(role)}`;
+  let head, name, eff = '';
+  if (st.kind === 'tick') {
+    head = `<b>${who(role)}</b>の番のはじめ`;
+    const np = st.lines.filter(l => l === '毒が回る').length, nd = st.lines.filter(l => l === '死の宣告が発動!').length;
+    const parts = [];
+    if (np) parts.push(`☠ 毒が回る${np > 1 ? ` ×${np}` : ''}`);
+    if (nd) parts.push(`💀 死の宣告が発動${nd > 1 ? ` ×${nd}` : ''}`);
+    name = `<div class="bn tick">${parts.join('<br>')}</div>`;
+  } else {
+    const a = ABIL[st.id];
+    head = `<b>${who(role)}</b> ・ ${st.face}の目`;
+    name = `<div class="bn ${st.invalid ? 'invalid' : ''}">${esc(a.name)}</div>`;
+    eff = `<div class="be">${esc(faceDesc(a, st.face))}</div>`;
+  }
+  const lines = st.lines.filter(l => l !== '毒が回る' && l !== '死の宣告が発動!');
+  el.innerHTML = `<div class="bw">${head}</div>${name}${eff}${lines.length ? `<div class="bl">${lines.map(fillNames).join('<br>')}</div>` : ''}`;
+  document.body.appendChild(el);
+}
+function hideBanner(now) {
+  document.querySelectorAll('.skillban').forEach(el => {
+    if (now) { el.remove(); return; }
+    el.classList.add('out'); setTimeout(() => el.remove(), 320);
+  });
+}
+
 // ---------------- バトル演出の再生 ----------------
 // V.battle はすでに最後まで計算済み。押された手番の分だけ、順に演出して見せる。
 const PB = { key: null, shown: 0, busy: false, log: [], snap: null, cube: null, hl: null };
@@ -901,18 +1055,28 @@ async function playTurn(t) {
   const key = PB.key, T = S.V.battle.turns[t];
   for (const st of T.steps) {
     if (PB.key !== key) return;
+    hideBanner();
     if (st.kind === 'roll') {
-      PB.cube = { face: st.face, role: T.role, spin: true };
       PB.hl = { role: T.role, face: st.face };
-      play('roll', { rate: 0.95 + Math.random() * 0.1 });
-      render(); await sleep(ROLL_ANIM_MS);
+      if (DGL) {
+        PB.cube = { face: st.face, role: T.role };
+        render();
+        await Promise.race([DGL.roll(S.V.dice[T.role], st.face, T.role === me()), sleep(2600)]);
+      } else {
+        PB.cube = { face: st.face, role: T.role, spin: true };
+        play('roll', { rate: 0.95 + Math.random() * 0.1 });
+        render(); await sleep(ROLL_ANIM_MS);
+      }
+      if (PB.key !== key) return;
     }
     const prev = PB.snap || { host: { life: S.V.points.host }, guest: { life: S.V.points.guest } };
+    showBanner(T.role, st);
     pushLog(T, st); PB.snap = st.snap; render();
     floatDelta(prev, st.snap);
     stepSound(prev, st);
-    await sleep(STEP_GAP_MS);
+    await sleep(BANNER_MS);
   }
+  hideBanner(); DGL?.clear();
   if (PB.key !== key) return;
   PB.shown = t + 1; PB.busy = false;
   S.writing.delete('roll' + t);
@@ -1152,13 +1316,6 @@ function viewSeat(r) {
   const life = inBattle ? snap[r].life : V.points[r];
   const badges = [];
   if (inBattle) {
-    const s = snap[r];
-    if (s.guard) badges.push(`🛡 防御${s.guard > 1 ? '×' + s.guard : ''}${s.guardTurns > 1 ? ` 相手の番あと${s.guardTurns}回` : ''}`);
-    if (s.charge) badges.push(`🔥 気合 次の番の攻撃×${s.charge}`);
-    if (s.power) badges.push(`🔥 攻撃×${s.power}`);
-    if (s.poison) badges.push(`☠ 毒 残り${s.poison}`);
-    if (s.doom) badges.push(`💀 宣告 あと${s.doom}`);
-    if (s.nullify) badges.push(`🚫 次の出目が無効${s.nullify > 1 ? '×' + s.nullify : ''}`);
     badges.push(`最大 ${V.battle.init[r]}`);
   }
   const turnT = PB.busy ? V.battle?.turns[PB.shown] : (V.phase === 'battle' ? V.battle.turns[V.rolled] : null);
@@ -1168,6 +1325,7 @@ function viewSeat(r) {
     <div class="life">${Math.max(0, life)}</div><div class="lbl">${inBattle ? 'LIFE' : 'CHIPS = LIFE'}</div>
     ${stacksHtml(life)}
     ${badges.length ? `<div class="badges">${badges.map(x => `<span>${x}</span>`).join('')}</div>` : ''}
+    ${inBattle ? viewStatus(r) : ''}
     ${S.room.presence?.[r] === false ? '<div class="off">切断中</div>' : ''}</div>`;
 }
 function viewList() {
@@ -1332,6 +1490,27 @@ function viewBattle() {
   }
   return `<div class="tbl-head"><span>BATTLE</span><span>${shownAll && V.phase === 'result' ? 'GAME OVER' : ''}</span></div>
     <div class="arena"><div class="scene"><div class="cube ${cls(role)}" id="cube" style="--rollms:${ROLL_ANIM_MS}ms">${faces}</div></div><div>${top}</div></div>`;
+}
+// 2人の状態(毒・死の宣告は重なった分を1つずつ並べる)
+function statusRows(s) {
+  if (!s) return [];
+  const rows = [];
+  if (s.guard) rows.push(['🛡', `防御 <b>${s.guard}回</b>防ぐ`, s.guardTurns > 1 ? `相手の番 あと${s.guardTurns}回のあいだ` : '相手の次の番だけ']);
+  if (s.power) rows.push(['🔥', `気合 この番の攻撃 <b>×${s.power}</b>`, '番が終わると消える']);
+  if (s.charge) rows.push(['🔥', `気合溜め 次の番の攻撃 <b>×${s.charge}</b>`, '自分の次の番に効く']);
+  (s.poisons || []).forEach((p, i, a) => rows.push(['☠', `毒${a.length > 1 ? (i + 1) : ''} 番のはじめに <b>${p.n}ダメ</b>`, `あと${p.left}回(防御で防げない)`]));
+  (s.dooms || []).forEach((d, i, a) => rows.push(['💀', `死の宣告${a.length > 1 ? (i + 1) : ''} <b>${d.n}ダメ</b>`, d.left === 1 ? '次の番のはじめに発動!' : `あと${d.left}番のはじめに発動`]));
+  if (s.nullify) rows.push(['🚫', `次の出目が無効${s.nullify > 1 ? ` <b>×${s.nullify}</b>` : ''}`, s.nullify > 1 ? `次の${s.nullify}回が何も起きない` : '次に振った目は何も起きない']);
+  return rows;
+}
+const lastStatus = {};
+function viewStatus(r) {
+  const rows = statusRows(PB.snap?.[r]);
+  const prev = lastStatus[r] || [];
+  const html = rows.length ? rows.map(([ic, t, sub]) => `<div class="st ${prev.includes(t + sub) ? '' : 'new'}"><span class="ic">${ic}</span><span>${t}<small>${sub}</small></span></div>`).join('')
+    : '<div class="none">なし</div>';
+  lastStatus[r] = rows.map(x => x[1] + x[2]);
+  return `<div class="status"><h5>状態</h5>${html}</div>`;
 }
 function viewLog() {
   if (!PB.log.length) return '<p class="muted">まだ誰も振っていません</p>';
