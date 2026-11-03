@@ -203,9 +203,39 @@ button.chip:hover:not(:disabled){transform:translateY(-3px)} button.chip{transit
 .log .le{padding:7px 10px;border-radius:10px;background:rgba(0,0,0,.28);border-left:3px solid var(--line);line-height:1.55}
 .log .le.me{border-left-color:var(--me)} .log .le.op{border-left-color:var(--op)}
 .log .le .h{font-weight:800}
-.float{position:fixed;z-index:60;pointer-events:none;font-family:var(--num);font-size:34px;font-weight:700;text-shadow:0 2px 6px rgba(0,0,0,.8);animation:floatup 1.3s ease-out forwards}
-.float.dmg{color:#ff7a66} .float.heal{color:#8be0a8}
-@keyframes floatup{0%{transform:translate(-50%,0);opacity:0}15%{opacity:1}100%{transform:translate(-50%,-60px);opacity:0}}
+/* 技の演出 */
+.fx{position:fixed;z-index:59;pointer-events:none;transform:translate(-50%,-50%)}
+.fx.fly{width:46px;height:46px;border-radius:50%;background:radial-gradient(circle,#fff 0 24%,#f1d58a 44%,rgba(241,213,138,0) 72%);box-shadow:0 0 30px 12px rgba(241,213,138,.6)}
+.fx.fly.op{background:radial-gradient(circle,#fff 0 22%,#ff7a66 40%,rgba(255,122,102,0) 72%);box-shadow:0 0 22px 8px rgba(255,110,90,.5)}
+.fx.fly.pierce{width:64px;box-shadow:0 0 26px 10px rgba(120,200,255,.6)}
+.fx.fly.power{width:62px;height:62px;box-shadow:0 0 30px 14px rgba(255,140,40,.7)}
+.fx.fly.poison{background:none;box-shadow:none;color:#c27bff;font-size:30px;text-shadow:0 0 12px #a050ff;display:flex;align-items:center;justify-content:center}
+.fx.fly.skullfly,.fx.fly.copy{background:none;box-shadow:none;font-size:34px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 0 8px rgba(0,0,0,.8))}
+.fx.fly.copy{color:var(--gold-hi)}
+.fx.fly.trail{filter:blur(2px)}
+.fx.ring{width:110px;height:110px;border-radius:50%;border:4px solid #ff7a66}
+.fx.ring.guard{border-color:#8fd0ff} .fx.ring.poison{border-color:#c27bff} .fx.ring.doom{border-color:#e0e0e0} .fx.ring.self{border-color:#ffae55} .fx.ring.gold{border-color:var(--gold-hi)}
+.fx.slash{width:150px;height:7px;border-radius:4px;background:linear-gradient(90deg,transparent,#fff 30%,#fff 70%,transparent);box-shadow:0 0 12px #ff7a66}
+.fx.num{font-family:var(--num);font-size:42px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,.9);white-space:nowrap}
+.fx.num.dmg{color:#ff7a66} .fx.num.heal{color:#8be0a8} .fx.num.poison{color:#c27bff}
+.fx.pop{font-size:22px;font-weight:800;white-space:nowrap;text-shadow:0 2px 8px rgba(0,0,0,.9);color:var(--gold-hi)}
+.fx.pop.guard{color:#8fd0ff} .fx.pop.poison{color:#c27bff} .fx.pop.doom{color:#eee} .fx.pop.fire{color:#ffae55} .fx.pop.dim{color:var(--sub)} .fx.pop.pierce{color:#8fd0ff;font-size:18px}
+.fx.spark{font-size:18px} .fx.spark.heal{color:#8be0a8;text-shadow:0 0 8px #4fc27a} .fx.spark.poison{color:#c27bff;font-size:14px;text-shadow:0 0 8px #a050ff}
+.fx.shield,.fx.skull{font-size:72px;filter:drop-shadow(0 0 14px rgba(140,200,255,.8))}
+.fx.skull{filter:drop-shadow(0 0 14px rgba(0,0,0,.9))}
+.fx.coin{width:84px;height:84px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff3c4,#d8b45a 60%,#8a6a2a);border:3px solid #f1d58a;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:#3a2a0a;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.6)}
+.fx.coin.ng{filter:grayscale(.7) brightness(.8)}
+.seat.fx-hurt{animation:seatHurt .45s}
+.seat.fx-heal{animation:seatHeal .8s}
+.seat.fx-guard{animation:seatGuard .8s}
+.seat.fx-charge{animation:seatCharge .8s}
+.seat.fx-trip{animation:seatTrip .6s}
+@keyframes seatHurt{0%,100%{transform:none}15%{transform:translateX(-9px);box-shadow:inset 0 0 40px rgba(255,80,60,.7)}35%{transform:translateX(8px)}55%{transform:translateX(-5px)}75%{transform:translateX(3px)}}
+@keyframes seatHeal{0%,100%{box-shadow:none}30%{box-shadow:inset 0 0 40px rgba(110,220,150,.6),0 0 24px rgba(110,220,150,.5)}}
+@keyframes seatGuard{0%,100%{box-shadow:none}30%{box-shadow:inset 0 0 40px rgba(140,200,255,.6),0 0 24px rgba(140,200,255,.6)}}
+@keyframes seatCharge{0%,100%{box-shadow:none}30%{box-shadow:inset 0 0 40px rgba(255,150,60,.6),0 0 24px rgba(255,150,60,.6)}}
+@keyframes seatTrip{0%,100%{transform:none}30%{transform:rotate(-3deg) translateY(4px)}60%{transform:rotate(2deg)}}
+.skillban .ln{transition:opacity .25s,transform .25s} .skillban .ln.pend{opacity:0;transform:translateY(6px)}
 .sefab{position:fixed;right:14px;bottom:14px;z-index:40;background:rgba(10,20,14,.85);font-size:12px;padding:7px 14px}
 /* [TEST] debug panel */
 .dbgfab{position:fixed;left:14px;bottom:14px;z-index:40;background:rgba(10,20,14,.85);font-size:12px;padding:7px 14px}
@@ -273,7 +303,8 @@ const TURN_LIMIT = 50;         // このターン数で決着しなければ残�
 const CHAIN_MAX = 3;           // 連続行動で追加で振れる回数の上限(1ターン内)
 const SHOW_TIE_AMOUNT = true;  // 同額だったとき、再入札の前にその金額を見せる
 const ROLL_ANIM_MS = 900;      // ダイスが転がる演出の長さ(立体ダイスが使えないときの代わりの演出)
-const BANNER_MS = 1500;        // 出た技の名前と効果を見せる時間
+const BANNER_MS = 1100;        // 技の演出が終わってから、技の名前と結果を見せておく時間
+const FX_GAP_MS = 520;         // 技の演出(攻撃1回・回復1回など)ごとの間隔
 const AUTO_ROLL_DELAY_MS = 700;
 
 // Firebase の設定(UCが作成したプロジェクトの値を入れる)
@@ -532,18 +563,20 @@ function simulate(dice, points, rng) {
     if (dg) return { winner: 'host', reason: `${R('guest')}のライフが0になった` };
     return null;
   };
-  const hit = (t, n, pierce, L) => {
+  // 演出用: 直前に書いた1行に「何が起きたか」を添える(li は対応する行、life はその時点のライフ)
+  const E = (L, o) => { (L.ev ||= []).push({ ...o, li: L.length - 1, life: { host: P.host.life, guest: P.guest.life } }); };
+  const hit = (t, n, pierce, L, src) => {
     const pw = t !== actor ? P[actor].power : 0; // 気合溜め: 手番の人が相手に与えるダメージだけ倍になる
-    if (pw > 1) { n *= pw; L.push(`気合で${pw}倍!`); }
+    if (pw > 1) { n *= pw; L.push(`気合で${pw}倍!`); E(L, { t: 'power', to: actor }); }
     if (!pierce && t !== actor && P[t].guard > 0) {
       P[t].guard--; if (!P[t].guard) P[t].guardTurns = 0;
-      L.push(`${R(t)}の防御が${n}ダメージを防いだ`); return;
+      L.push(`${R(t)}の防御が${n}ダメージを防いだ`); E(L, { t: 'block', from: actor, to: t }); return;
     }
-    P[t].life -= n; L.push(`${R(t)}に${n}ダメージ`);
+    P[t].life -= n; L.push(`${R(t)}に${n}ダメージ`); E(L, { t: 'hit', from: actor, to: t, n, pierce: !!pierce, pw: pw > 1, src });
   };
   const heal = (t, n, L) => {
     const v = Math.max(0, Math.min(n, P[t].max - P[t].life));
-    P[t].life += v; L.push(v > 0 ? `${R(t)}が${v}回復` : `${R(t)}は回復しなかった(最大ライフ)`);
+    P[t].life += v; L.push(v > 0 ? `${R(t)}が${v}回復` : `${R(t)}は回復しなかった(最大ライフ)`); E(L, { t: 'heal', to: t, n: v });
   };
   function resolve(me, id, face, L, ctx, depth) {
     const op = other(me), a = ABIL[id];
@@ -551,33 +584,33 @@ function simulate(dice, points, rng) {
       switch (f.op) {
         case 'dmg': for (let i = 0; i < (f.hits || 1); i++) hit(op, f.n, f.pierce, L); break;
         case 'heal': heal(me, f.n, L); break;
-        case 'poison': P[op].poisons.push({ n: f.n, left: f.ticks }); L.push(`${R(op)}に毒(${f.ticks}ターン)`); break;
+        case 'poison': P[op].poisons.push({ n: f.n, left: f.ticks }); L.push(`${R(op)}に毒(${f.ticks}ターン)`); E(L, { t: 'poison', from: me, to: op }); break;
         case 'gamble':
-          if (rng() < f.p) { L.push('コインは表!'); hit(op, f.n, false, L); } else L.push('コインは裏…外れ');
+          if (rng() < f.p) { L.push('コインは表!'); E(L, { t: 'coin', to: me, ok: true }); hit(op, f.n, false, L); } else { L.push('コインは裏…外れ'); E(L, { t: 'coin', to: me, ok: false }); }
           break;
         case 'both': hit(me, f.n, false, L); hit(op, f.n, false, L); break;
         case 'drain': hit(op, f.n, false, L); heal(me, f.heal, L); break;
         case 'chase': hit(op, P[op].life * 2 <= P[op].max ? f.hi : f.lo, false, L); break;
         case 'guard': // 重ねたときは、回数も残りの番の数も多いほうを残す
           P[me].guard = Math.max(P[me].guard, f.n); P[me].guardTurns = Math.max(P[me].guardTurns, f.turns);
-          L.push(`${R(me)}が防御の構え(${P[me].guardTurns > 1 ? `相手の番${P[me].guardTurns}回のあいだ` : '相手の次の番'})`);
+          L.push(`${R(me)}が防御の構え(${P[me].guardTurns > 1 ? `相手の番${P[me].guardTurns}回のあいだ` : '相手の次の番'})`); E(L, { t: 'guard', to: me });
           break;
-        case 'chain': ctx.chain = true; L.push('もう一度振る!'); break;
+        case 'chain': ctx.chain = true; L.push('もう一度振る!'); E(L, { t: 'chain', to: me }); break;
         case 'copy': {
           const lf = P[op].lastFace;
           if (depth > 0) { L.push('コピーのコピーは何も起きない'); break; }
           if (!lf) { L.push(`${R(op)}はまだ振っていないので何も起きない`); break; }
           const cid = dice[op][lf - 1];
-          L.push(`${R(op)}の${lf}の面「${ABIL[cid].name}」をコピー`);
+          L.push(`${R(op)}の${lf}の面「${ABIL[cid].name}」をコピー`); E(L, { t: 'copy', from: op, to: me });
           resolve(me, cid, lf, L, ctx, depth + 1);
           break;
         }
-        case 'charge': P[me].charge = Math.max(P[me].charge, f.n); L.push(`${R(me)}が気合を溜めた(次の番の攻撃が${P[me].charge}倍)`); break;
+        case 'charge': P[me].charge = Math.max(P[me].charge, f.n); L.push(`${R(me)}が気合を溜めた(次の番の攻撃が${P[me].charge}倍)`); E(L, { t: 'charge', to: me }); break;
         case 'selfdmg': hit(me, f.n, false, L); break;
-        case 'none': L.push('何も起きない'); break;
-        case 'trip': P[me].nullify++; L.push(`${R(me)}は転んだ(次の出目が無効)`); break;
+        case 'none': L.push('何も起きない'); E(L, { t: 'none', to: me }); break;
+        case 'trip': P[me].nullify++; L.push(`${R(me)}は転んだ(次の出目が無効)`); E(L, { t: 'trip', to: me }); break;
         case 'rampage': hit(me, f.n, false, L); heal(op, f.heal, L); break;
-        case 'doom': P[op].dooms.push({ n: f.n, left: f.delay }); L.push(`${R(op)}に死の宣告(${f.delay}ターン後)`); break;
+        case 'doom': P[op].dooms.push({ n: f.n, left: f.delay }); L.push(`${R(op)}に死の宣告(${f.delay}ターン後)`); E(L, { t: 'doom', from: me, to: op }); break;
       }
     }
   }
@@ -591,12 +624,12 @@ function simulate(dice, points, rng) {
     turns.push(T);
     // ターン開始時の処理(毒・死の宣告)
     const L = [];
-    for (const p of P[me].poisons) { L.push('毒が回る'); hit(me, p.n, true, L); p.left--; }
+    for (const p of P[me].poisons) { L.push('毒が回る'); hit(me, p.n, true, L, 'poison'); p.left--; }
     P[me].poisons = P[me].poisons.filter(p => p.left > 0);
-    for (const d of P[me].dooms) { d.left--; if (d.left === 0) { L.push('死の宣告が発動!'); hit(me, d.n, false, L); } }
+    for (const d of P[me].dooms) { d.left--; if (d.left === 0) { L.push('死の宣告が発動!'); hit(me, d.n, false, L, 'doom'); } }
     P[me].dooms = P[me].dooms.filter(d => d.left > 0);
     if (L.length) {
-      T.steps.push({ kind: 'tick', lines: L, snap: snap() });
+      T.steps.push({ kind: 'tick', lines: L, ev: L.ev || [], snap: snap() });
       if ((result = judge())) break outer;
     }
     for (let chain = 0; ; chain++) {
@@ -604,11 +637,11 @@ function simulate(dice, points, rng) {
       const id = dice[me][face - 1];
       const step = { kind: 'roll', face, id, lines: [], invalid: false };
       const ctx = { chain: false };
-      if (P[me].nullify > 0) { P[me].nullify--; step.invalid = true; step.lines.push('この出目は無効になった'); }
+      if (P[me].nullify > 0) { P[me].nullify--; step.invalid = true; step.lines.push('この出目は無効になった'); E(step.lines, { t: 'invalid', to: me }); }
       else resolve(me, id, face, step.lines, ctx, 0);
       P[me].lastFace = face;
       if (ctx.chain && chain >= CHAIN_MAX) { step.lines.push(`(連続行動は${CHAIN_MAX}回まで)`); ctx.chain = false; }
-      step.snap = snap();
+      step.snap = snap(); step.ev = step.lines.ev || [];
       T.steps.push(step);
       if ((result = judge())) break outer;
       if (!ctx.chain) break;
@@ -1014,9 +1047,13 @@ function showBanner(role, st) {
     name = `<div class="bn ${st.invalid ? 'invalid' : ''}">${esc(a.name)}</div>`;
     eff = `<div class="be">${esc(faceDesc(a, st.face))}</div>`;
   }
-  const lines = st.lines.filter(l => l !== '毒が回る' && l !== '死の宣告が発動!');
-  el.innerHTML = `<div class="bw">${head}</div>${name}${eff}${lines.length ? `<div class="bl">${lines.map(fillNames).join('<br>')}</div>` : ''}`;
+  // 結果の行は、対応する演出が出たときに1行ずつ見せる(revealBanner)
+  const lines = st.lines.map((l, i) => [l, i]).filter(([l]) => l !== '毒が回る' && l !== '死の宣告が発動!');
+  el.innerHTML = `<div class="bw">${head}</div>${name}${eff}${lines.length ? `<div class="bl">${lines.map(([l, i]) => `<div class="ln pend" data-li="${i}">${fillNames(l)}</div>`).join('')}</div>` : ''}`;
   document.body.appendChild(el);
+}
+function revealBanner(li) {
+  document.querySelectorAll('.skillban .ln.pend').forEach(el => { if (Number(el.dataset.li) <= li) el.classList.remove('pend'); });
 }
 function hideBanner(now) {
   document.querySelectorAll('.skillban').forEach(el => {
@@ -1025,10 +1062,158 @@ function hideBanner(now) {
   });
 }
 
+// ---------------- 技の演出 ----------------
+// simulate() が残した出来事(step.ev)を1つずつ見せる。攻撃などは振った人の席から相手の席へ飛ばす
+// apply() を呼んだ時点でライフの表示がその出来事のあとの値になる
+const FX_FLY_MS = 380;
+function seatPt(r) {
+  const el = document.querySelector(`#seat-${cls(r)} .life`) || document.getElementById('seat-' + cls(r));
+  if (!el) return { x: innerWidth / 2, y: innerHeight / 2 };
+  const b = el.getBoundingClientRect();
+  // 席が画面の外までスクロールしていても、演出は画面の端に見えるようにする
+  return { x: b.left + b.width / 2, y: Math.max(70, Math.min(innerHeight - 70, b.top + b.height / 2)) };
+}
+function fxEl(className, p, html = '') {
+  const el = document.createElement('div');
+  el.className = 'fx ' + className; el.innerHTML = html;
+  el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+  document.body.appendChild(el);
+  return el;
+}
+// 終わったら消える1回きりの演出
+function fxOnce(className, p, html, frames, ms) {
+  const el = fxEl(className, p, html);
+  el.animate(frames, { duration: ms, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' }).onfinish = () => el.remove();
+  return el;
+}
+// 席から席へ弾を飛ばす(少し山なりに)
+function fxFly(className, from, to, html = '') {
+  const a = seatPt(from), b = seatPt(to);
+  const el = fxEl('fly ' + className, a, html);
+  const dx = b.x - a.x, dy = b.y - a.y, lift = -Math.min(120, Math.abs(dx) * .25);
+  const anim = el.animate([
+    { transform: 'translate(-50%,-50%) scale(.6)', opacity: .4 },
+    { transform: `translate(calc(-50% + ${dx / 2}px),calc(-50% + ${dy / 2 + lift}px)) scale(1.15)`, opacity: 1, offset: .5 },
+    { transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(1)`, opacity: 1 },
+  ], { duration: FX_FLY_MS, easing: 'ease-in' });
+  // 残像を少し遅らせて追わせ、どこから飛んできたか分かるようにする
+  for (let i = 1; i <= 3; i++) {
+    const tr = fxEl('fly trail ' + className, a, html);
+    const k = .5 - i * .12;
+    tr.animate(anim.effect.getKeyframes().map(f => ({ transform: f.transform, offset: f.offset, opacity: Number(f.opacity) * k })), { duration: FX_FLY_MS, delay: i * 45, easing: 'ease-in', fill: 'both' }).onfinish = () => tr.remove();
+  }
+  return new Promise(res => { anim.onfinish = () => { el.remove(); res(); }; });
+}
+const POP = [
+  { transform: 'translate(-50%,-50%) scale(.3)', opacity: 0 },
+  { transform: 'translate(-50%,-50%) scale(1.15)', opacity: 1, offset: .25 },
+  { transform: 'translate(-50%,-50%) scale(1)', opacity: 1, offset: .7 },
+  { transform: 'translate(-50%,-90%) scale(1)', opacity: 0 },
+];
+const RING = [{ transform: 'translate(-50%,-50%) scale(.2)', opacity: 1 }, { transform: 'translate(-50%,-50%) scale(1.5)', opacity: 0 }];
+const fxPop = (r, text, kind, ms = 1000) => fxOnce('pop ' + kind, { x: seatPt(r).x, y: seatPt(r).y - 46 }, text, POP, ms);
+const fxRing = (r, kind) => fxOnce('ring ' + kind, seatPt(r), '', RING, 520);
+function fxNum(r, text, kind) {
+  const p = seatPt(r);
+  fxOnce('num ' + kind, { x: p.x + 46, y: p.y }, text, [
+    { transform: 'translate(-50%,-50%) scale(1.6)', opacity: 0 },
+    { transform: 'translate(-50%,-50%) scale(1)', opacity: 1, offset: .15 },
+    { transform: 'translate(-50%,-50%) scale(1)', opacity: 1, offset: .6 },
+    { transform: 'translate(-50%,-140%) scale(1)', opacity: 0 },
+  ], 1300);
+}
+// 席そのものを揺らす・光らせる(描き直しで消えるので apply のあとにかける)
+function fxSeat(r, kind) {
+  const el = document.getElementById('seat-' + cls(r));
+  if (!el) return;
+  el.classList.remove('fx-' + kind); el.getBoundingClientRect(); el.classList.add('fx-' + kind);
+  el.addEventListener('animationend', () => el.classList.remove('fx-' + kind), { once: true });
+}
+function fxSparkle(r, kind, ch, n = 7) {
+  const p = seatPt(r);
+  for (let i = 0; i < n; i++) {
+    const x = p.x + (Math.random() - .5) * 120, y = p.y + 20 + Math.random() * 30;
+    const el = fxEl('spark ' + kind, { x, y }, ch);
+    el.animate([{ transform: 'translate(-50%,-50%) scale(.4)', opacity: 0 }, { opacity: 1, offset: .3 },
+      { transform: `translate(-50%,calc(-50% - ${60 + Math.random() * 50}px)) scale(1)`, opacity: 0 }],
+      { duration: 800 + Math.random() * 300, delay: i * 50, easing: 'ease-out', fill: 'backwards' }).onfinish = () => el.remove();
+  }
+}
+async function fxPlay(ev, apply) {
+  const side = ev.from ? cls(ev.from) : '';
+  switch (ev.t) {
+    case 'hit':
+      if (ev.src === 'poison') { fxSparkle(ev.to, 'poison', '●', 8); await sleep(260); }
+      else if (ev.src === 'doom') { fxOnce('skull', seatPt(ev.to), '💀', [{ transform: 'translate(-50%,-260%) scale(1.8)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1, offset: .55 }, { transform: 'translate(-50%,-50%) scale(1.3)', opacity: 0 }], 700); await sleep(380); }
+      else if (ev.from === ev.to) { fxRing(ev.to, 'self'); await sleep(160); }
+      else await fxFly(`${side} ${ev.pierce ? 'pierce' : ''} ${ev.pw ? 'power' : ''}`, ev.from, ev.to);
+      apply();
+      fxSeat(ev.to, 'hurt');
+      if (ev.src !== 'poison' && ev.src !== 'doom') fxOnce('slash', seatPt(ev.to), '', [{ transform: 'translate(-50%,-50%) rotate(-28deg) scaleX(0)', opacity: 1 }, { transform: 'translate(-50%,-50%) rotate(-28deg) scaleX(1)', opacity: 1, offset: .4 }, { transform: 'translate(-50%,-50%) rotate(-28deg) scaleX(1)', opacity: 0 }], 420);
+      fxRing(ev.to, ev.src || 'dmg');
+      if (ev.pierce && !ev.src) fxPop(ev.to, '貫通!', 'pierce', 800);
+      fxNum(ev.to, '-' + ev.n, ev.src === 'poison' ? 'poison' : 'dmg');
+      play('hit', { gain: ev.to === me() ? 1 : 0.75 });
+      break;
+    case 'block':
+      fxOnce('shield', seatPt(ev.to), '🛡', [{ transform: 'translate(-50%,-50%) scale(.4)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1.1)', opacity: 1, offset: .3 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1, offset: .8 }, { transform: 'translate(-50%,-50%) scale(1.3)', opacity: 0 }], 1000);
+      await fxFly(side, ev.from, ev.to);
+      apply();
+      fxRing(ev.to, 'guard'); fxSeat(ev.to, 'guard');
+      fxPop(ev.to, '防いだ!', 'guard');
+      play('barrier', { gain: 0.7 });
+      break;
+    case 'heal':
+      apply();
+      if (ev.n > 0) { fxSparkle(ev.to, 'heal', '✚', 9); fxSeat(ev.to, 'heal'); fxNum(ev.to, '+' + ev.n, 'heal'); play('heal', { gain: 0.7 }); }
+      else fxPop(ev.to, '満タン', 'dim');
+      break;
+    case 'poison':
+      await fxFly('poison', ev.from, ev.to, '●');
+      apply(); fxSparkle(ev.to, 'poison', '●', 6); fxRing(ev.to, 'poison'); fxPop(ev.to, '☠ 毒', 'poison');
+      play('hit', { gain: 0.35, rate: 0.7 });
+      break;
+    case 'doom':
+      await fxFly('skullfly', ev.from, ev.to, '💀');
+      apply(); fxRing(ev.to, 'doom'); fxPop(ev.to, '死の宣告', 'doom', 1100);
+      play('hit', { gain: 0.35, rate: 0.55 });
+      break;
+    case 'guard':
+      apply(); fxSeat(ev.to, 'guard'); fxRing(ev.to, 'guard'); fxPop(ev.to, '🛡 防御', 'guard');
+      play('barrier', { gain: 0.6 });
+      break;
+    case 'charge':
+      apply(); fxSparkle(ev.to, 'fire', '🔥', 6); fxSeat(ev.to, 'charge'); fxPop(ev.to, '気合溜め!', 'fire');
+      play('turn', { gain: 0.5, rate: 1.3 });
+      break;
+    case 'power':
+      apply(); fxSparkle(ev.to, 'fire', '🔥', 4); fxPop(ev.to, '気合で倍!', 'fire', 800);
+      await sleep(200);
+      break;
+    case 'coin': {
+      const p = { x: innerWidth / 2, y: innerHeight * .44 };
+      const el = fxEl('coin', p, '<span>?</span>');
+      await el.animate([{ transform: 'translate(-50%,-50%) translateY(30px) rotateX(0)' }, { transform: 'translate(-50%,-50%) translateY(-60px) rotateX(900deg)', offset: .5 }, { transform: 'translate(-50%,-50%) translateY(0) rotateX(1800deg)' }], { duration: 700, easing: 'ease-out' }).finished;
+      el.firstChild.textContent = ev.ok ? '表' : '裏'; el.classList.add(ev.ok ? 'ok' : 'ng');
+      play('chip', { rate: ev.ok ? 1.2 : 0.8 });
+      apply();
+      el.animate([{ opacity: 1 }, { opacity: 1, offset: .7 }, { opacity: 0 }], { duration: 1000, fill: 'forwards' }).onfinish = () => el.remove();
+      await sleep(300);
+      break;
+    }
+    case 'chain': apply(); fxPop(ev.to, 'もう一度!', 'gold'); fxRing(ev.to, 'gold'); break;
+    case 'copy': await fxFly('copy', ev.from, ev.to, '⧉'); apply(); fxPop(ev.to, 'コピー', 'gold'); break;
+    case 'none': apply(); fxPop(ev.to, '…', 'dim'); break;
+    case 'trip': apply(); fxSeat(ev.to, 'trip'); fxPop(ev.to, '転んだ!', 'dim'); play('hit', { gain: 0.3, rate: 1.4 }); break;
+    case 'invalid': apply(); fxPop(ev.to, '🚫 無効', 'dim'); fxSeat(ev.to, 'trip'); break;
+    default: apply();
+  }
+}
+
 // ---------------- バトル演出の再生 ----------------
 // V.battle はすでに最後まで計算済み。押された手番の分だけ、順に演出して見せる。
 const PB = { key: null, shown: 0, busy: false, log: [], snap: null, cube: null, hl: null };
-function resetPlayback() { Object.assign(PB, { key: null, shown: 0, busy: false, log: [], snap: null, cube: null, hl: null }); }
+function resetPlayback() { Object.assign(PB, { key: null, shown: 0, busy: false, log: [], snap: null, cube: null, hl: null, life: null }); }
 function syncPlayback() {
   const V = S.V; if (!V?.battle) return;
   const key = `${S.code}/${S.g}`;
@@ -1072,9 +1257,16 @@ async function playTurn(t) {
     }
     const prev = PB.snap || { host: { life: S.V.points.host }, guest: { life: S.V.points.guest } };
     showBanner(T.role, st);
+    // 起きたことを1つずつ演出し、そのたびにライフを動かす(状態の欄は最後にまとめて更新)
+    PB.life = { host: prev.host.life, guest: prev.guest.life };
+    for (const ev of st.ev) {
+      if (PB.key !== key) return;
+      await fxPlay(ev, () => { revealBanner(ev.li); PB.life = { ...ev.life }; render(); });
+      await sleep(FX_GAP_MS);
+    }
+    revealBanner(Infinity);
+    PB.life = null;
     pushLog(T, st); PB.snap = st.snap; render();
-    floatDelta(prev, st.snap);
-    stepSound(prev, st);
     await sleep(BANNER_MS);
   }
   hideBanner(); DGL?.clear();
@@ -1140,14 +1332,6 @@ function soundWatch(V) {
   }
   if (V.history.length > p.hist || V.auto.length > p.auto) play('write');
   if (p.phase !== 'battle' && V.phase === 'battle' && V.need.by === me() && V.rolled === 0) setTimeout(() => play('turn', { gain: 0.6 }), 400);
-}
-function stepSound(prev, st) {
-  if (st.lines.some(l => l.includes('防御が'))) play('barrier', { gain: 0.7 });
-  for (const r of ['host', 'guest']) {
-    const d = st.snap[r].life - prev[r].life;
-    if (d < 0) play('hit', { gain: r === me() ? 1 : 0.75 });
-    else if (d > 0) play('heal', { gain: 0.7 });
-  }
 }
 
 // =====================================================================
@@ -1314,7 +1498,7 @@ function viewSeat(r) {
   const V = S.V;
   const inBattle = !!V.battle;
   const snap = inBattle ? (PB.snap || { host: { life: V.points.host }, guest: { life: V.points.guest } }) : null;
-  const life = inBattle ? snap[r].life : V.points[r];
+  const life = inBattle ? (PB.life?.[r] ?? snap[r].life) : V.points[r];
   const badges = [];
   if (inBattle) {
     badges.push(`最大 ${V.battle.init[r]}`);
@@ -1551,23 +1735,6 @@ function flyChip(fromEl, d) {
   el.style.transform = `translate(${b.left + b.width / 2 - a.left - 29}px,${b.top + b.height / 2 - a.top - 29}px) scale(.85)`;
   setTimeout(() => { el.style.opacity = '0'; }, 380);
   setTimeout(() => el.remove(), 800);
-}
-// バトル中のダメージ・回復を席の上に浮かせて見せる
-function floatDelta(prev, next) {
-  if (!prev || !next) return;
-  for (const r of ['host', 'guest']) {
-    const d = next[r].life - prev[r].life;
-    if (!d) continue;
-    const seat = document.getElementById('seat-' + cls(r));
-    if (!seat) continue;
-    const box = seat.querySelector('.life').getBoundingClientRect();
-    const el = document.createElement('div');
-    el.className = `float ${d < 0 ? 'dmg' : 'heal'}`;
-    el.textContent = (d > 0 ? '+' : '') + d;
-    el.style.left = box.left + 40 + 'px'; el.style.top = box.top + 'px';
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 1400);
-  }
 }
 
 let toastTimer;
