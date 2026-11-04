@@ -237,8 +237,7 @@ button.chip:hover:not(:disabled){transform:translateY(-3px)} button.chip{transit
 @keyframes seatTrip{0%,100%{transform:none}30%{transform:rotate(-3deg) translateY(4px)}60%{transform:rotate(2deg)}}
 .skillban .ln{transition:opacity .25s,transform .25s} .skillban .ln.pend{opacity:0;transform:translateY(6px)}
 .sefab{position:fixed;right:14px;bottom:14px;z-index:40;background:rgba(10,20,14,.85);font-size:12px;padding:7px 14px}
-/* [TEST] debug panel */
-.dbgfab{position:fixed;left:14px;bottom:14px;z-index:40;background:rgba(10,20,14,.85);font-size:12px;padding:7px 14px}
+/* 能力の調整パネル */
 .dbg{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.6);display:flex;justify-content:center;align-items:flex-start;padding:24px 12px;overflow:auto}
 .dbg[hidden]{display:none}
 .dbg .box{background:#0f1c14;border:1px solid var(--gold2);border-radius:14px;padding:16px;width:min(980px,100%)}
@@ -288,8 +287,7 @@ button.chip:hover:not(:disabled){transform:translateY(-3px)} button.chip{transit
 <body>
 <div class="wrap" id="app"></div>
 <button id="muteBtn" class="ghost sefab" type="button">🔊 音あり</button>
-<button id="dbgBtn" class="ghost dbgfab" type="button" hidden>能力一覧(デバッグ)</button><!-- [TEST] -->
-<div id="dbg" class="dbg" hidden></div><!-- [TEST] -->
+<div id="dbg" class="dbg" hidden></div>
 
 <script type="module">
 // =====================================================================
@@ -364,7 +362,7 @@ function getPool(mode) {
 const ABIL = {};
 for (const k in POOLS) for (const a of POOLS[k] || []) ABIL[a.id] = a;
 
-// [TEST] デバッグ用の調整値。{ '能力id~fx~0~n': 9 } の形で定義テーブルの数値を上書きする(値を決めたら削除する)
+// 能力の調整値。{ '能力id~fx~0~n': 9 } の形で定義テーブルの数値を上書きする
 // ゲーム開始時にホストの調整値を pub/start.tune に入れて配るので、両クライアントで同じ値になる
 const TUNE_KEYS = ['n', 'hits', 'ticks', 'p', 'heal', 'hi', 'lo', 'delay', 'turns'];
 const BASE_FX = {};
@@ -670,8 +668,6 @@ import { getDatabase, ref, set, get, update, remove, onValue, onDisconnect, serv
 
 // [TEST] ?emu をつけるとローカルの Firebase エミュレータにつなぐ(開発用)
 const EMU = new URLSearchParams(location.search).has('emu');
-// [TEST] ?debug をつけると能力一覧と数値調整のパネルが出る
-const DEBUG = new URLSearchParams(location.search).has('debug');
 const TUNE_KEY = 'diceauction_tune_v1';
 let localTune = {};
 try { localTune = JSON.parse(lsGet(TUNE_KEY) || '{}') || {}; } catch { localTune = {}; }
@@ -829,7 +825,7 @@ function onGameData() {
     if (f.host && f.guest && !S.sec[key] && !S.fetching.has(key)) fetchSecret(key);
     else if (f[me()] && S.mySec[key] == null && !S.fetching.has('my:' + key)) fetchMySecret(key); // 再読み込み後に自分の入札額を表示するため
   }
-  applyTune(S.pub.start.tune); // [TEST] 調整値なしなら定義テーブルの値に戻る
+  applyTune(S.pub.start.tune); // 調整値なしなら定義テーブルの値に戻る
   S.V = derive(S.pub, rev);
   if (S.V.phase !== 'pick') S.pickSel = null;
   if (S.V.need?.bid !== S.bidKey) { S.bidKey = S.V.need?.bid; S.bidDraft = ''; S.err = ''; }
@@ -920,7 +916,7 @@ async function maybeStartRematch() {
 }
 function startData() {
   const d = { mode: S.room.mode, at: serverTimestamp() };
-  if (DEBUG && Object.keys(localTune).length) d.tune = { ...localTune }; // [TEST]
+  if (Object.keys(localTune).length) d.tune = { ...localTune };
   return d;
 }
 async function startGame() {
@@ -1371,7 +1367,7 @@ function patch(el, html) {
 }
 
 function header(extra = '') {
-  const tuned = S.screen === 'game' && S.pub?.start?.tune ? '<span class="tag" title="ホストのデバッグ調整値で対戦中">調整値あり</span>' : ''; // [TEST]
+  const tuned = S.screen === 'game' && S.pub?.start?.tune ? '<span class="tag" title="ホストが調整した能力の数値で対戦中">調整値あり</span>' : '';
   return `<header><div class="logo">DICE AUCTION<small>ダイスオークション(仮)</small></div>${extra}${tuned}<div class="spacer"></div>
     ${S.code ? `<span class="tag">ROOM ${esc(S.code)}</span><button class="ghost" data-act="leave">退出</button>` : ''}</header>`;
 }
@@ -1441,12 +1437,19 @@ function viewLobby() {
       <button class="btn" data-act="create" style="width:100%">ルームを作る</button></div>
     <div class="panel"><h2>テーブルに着く</h2>
       <div class="row"><input id="codeInput" inputmode="numeric" maxlength="4" placeholder="ルーム番号(4桁)" style="flex:1"><button class="btn" data-act="join" style="padding:10px 22px">参加</button></div></div>
+    ${tunePanel('ルームを作ったとき(ホストのとき)に、この値で対戦します。')}
     <div class="err center">${esc(S.err)}</div>
     <div class="panel">${rulesText()}</div>
     <p class="center muted" style="font-size:12px"><a href="about.html" style="color:var(--sub)">利用規約・データの取り扱い・クレジット</a></p>
   </div>`;
 }
 
+// ゲーム前の画面に出す「能力の調整」の入口
+function tunePanel(note) {
+  const n = Object.keys(localTune).length;
+  return `<div class="panel center"><button class="ghost" data-act="tune" style="padding:10px 26px">能力の一覧と数値の調整${n ? ` ・ 変更${n}件` : ''}</button>
+    <div class="muted" style="font-size:12px;margin-top:8px">${note}</div></div>`;
+}
 function modeSelect() {
   return `<select id="modeSel" data-act="mode">${Object.entries(MODES).map(([k, m]) => `<option value="${k}" ${S.room.mode === k ? 'selected' : ''}>${m.label}</option>`).join('')}</select>`;
 }
@@ -1464,6 +1467,7 @@ function viewRoom() {
     <div class="panel">${slot('host')}${slot('guest')}</div>
     <div class="panel"><h2>モード</h2>${isHost ? modeSelect() : `<b>${esc(MODES[S.room.mode]?.label)}</b>`}${poolNote}
       <div class="muted" style="font-size:12px;margin-top:8px">開示あり: 一覧で能力の効果まで見える / 開示なし: 名前だけ見える(効果は落札されたときに公開)</div></div>
+    ${isHost ? tunePanel('ゲーム開始のとき、この値が相手にも配られて、その対戦はこの値で進みます。') : '<div class="muted center" style="font-size:12px">能力の数値は、ホストが調整した値で対戦します</div>'}
     ${isHost
       ? `<button class="btn" data-act="start" ${pl.guest ? '' : 'disabled'}>ゲーム開始</button>${pl.guest ? '' : '<div class="muted center" style="font-size:13px">相手の参加を待っています</div>'}`
       : `<div class="wait">ホストの開始を待っています<span class="dots"></span></div>`}
@@ -1744,7 +1748,7 @@ function toast(msg) {
   el.textContent = msg; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.remove(), 2500);
 }
 
-// ---------------- [TEST] デバッグ: 能力一覧と数値調整 ----------------
+// ---------------- 能力一覧と数値の調整(ゲーム前にロビー・ルームから開く) ----------------
 const PARAM_LABEL = { turns: '相手の番の数', hits: '回数', ticks: 'ターン数', p: '表の確率', heal: '回復', hi: '半分以下', lo: 'それ以外', delay: '何ターン後' };
 const N_LABEL = { dmg: 'ダメージ', heal: '回復', poison: '毎ターン', gamble: 'ダメージ', both: 'ダメージ', drain: 'ダメージ', guard: '防ぐ回数', charge: '倍率', selfdmg: 'ダメージ', rampage: '自分へ', doom: 'ダメージ' };
 const paramLabel = (op, key) => key === 'n' ? (N_LABEL[op] || '数値') : PARAM_LABEL[key];
@@ -1778,7 +1782,7 @@ function renderDbg() {
       <td class="pr">${dbgParams(a)}</td><td class="ds">${esc(dbgDesc(a))}</td></tr>`).join('')}`).join('');
   const n = Object.keys(localTune).length;
   dbgEl.innerHTML = `<div class="box">
-    <div class="top"><h3>能力一覧(デバッグ)</h3><span class="tag">変更 ${n}件</span><div class="spacer" style="flex:1"></div>
+    <div class="top"><h3>能力の調整</h3><span class="tag">変更 ${n}件</span><div class="spacer" style="flex:1"></div>
       <button class="ghost" data-dbg="export">変更点を書き出す</button><button class="ghost" data-dbg="reset" ${n ? '' : 'disabled'}>全部元に戻す</button><button class="btn" data-dbg="close" style="padding:8px 18px">閉じる</button></div>
     <div class="note">数値はこのブラウザに保存されます。ゲーム開始(再戦を含む)のとき、ホストの調整値が相手にも配られて、その対戦はその値で進みます。
       ${ingame ? '<br><b style="color:var(--gold-hi)">いまの対戦には反映されません。次のゲームから反映されます。</b>' : ''}
@@ -1801,14 +1805,11 @@ function dbgExport() {
   out.hidden = false; out.select();
   navigator.clipboard?.writeText(out.value).then(() => toast('クリップボードにコピーしました'), () => {});
 }
-if (DEBUG) {
-  const btn = document.getElementById('dbgBtn');
-  btn.hidden = false;
-  btn.addEventListener('click', () => { dbgOpen = true; renderDbg(); });
+{
   dbgEl.addEventListener('click', e => {
-    if (e.target === dbgEl) { dbgOpen = false; renderDbg(); return; }
+    if (e.target === dbgEl) { dbgOpen = false; renderDbg(); render(); return; }
     const act = e.target.closest('[data-dbg]')?.dataset.dbg;
-    if (act === 'close') { dbgOpen = false; renderDbg(); }
+    if (act === 'close') { dbgOpen = false; renderDbg(); render(); }
     else if (act === 'reset') { localTune = {}; lsSet(TUNE_KEY, null); renderDbg(); }
     else if (act === 'export') dbgExport();
   });
@@ -1827,7 +1828,8 @@ if (DEBUG) {
 $app.addEventListener('click', e => {
   const t = e.target.closest('[data-act]'); if (!t) return;
   const act = t.dataset.act;
-  if (act === 'create') createRoom();
+  if (act === 'tune') { dbgOpen = true; renderDbg(); }
+  else if (act === 'create') createRoom();
   else if (act === 'join') joinRoom(document.getElementById('codeInput').value.trim());
   else if (act === 'leave') leaveRoom();
   else if (act === 'start') startGame();
