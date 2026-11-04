@@ -203,6 +203,8 @@ button.chip:hover:not(:disabled){transform:translateY(-3px)} button.chip{transit
 .mf.hit{background:rgba(216,180,90,.35);box-shadow:0 0 0 1px var(--gold2)}
 .dcard.cur{transform:translateY(-3px);box-shadow:0 0 0 3px var(--gold),0 0 18px rgba(241,213,138,.6)}
 .dcard.broken{opacity:.45;filter:grayscale(.8)}
+.dcard.decoy{background:#e9e2cf;border-style:dashed}
+.psv{margin-top:8px;font-size:11.5px;line-height:1.5;padding:5px 7px;border-radius:7px;background:rgba(138,106,42,.15);color:#5a4413}
 /* battle */
 .arena{padding:4px 6px}
 .turnline{font-size:14px;color:rgba(239,230,207,.8);line-height:1.7} .turnline b{color:var(--text)}
@@ -335,49 +337,62 @@ const ROOM_CLEANUP_MS = 12 * 3600 * 1000; // この時間より前に作られ�
 
 // ---------------- ダイス定義テーブル ----------------
 // Formation Battle Encounter の24体を、このゲーム用に読み替えたもの。各ダイスは1〜6の面の効果が初めから決まっている。
-// 読み替えの決まり(ダイスオークション_システム設計書.md):
-//  敵1体・最前列・後列・同じ列・対応マス・複数体・列・全体 → 相手に1回 / 味方1体・全体・前列 → 自分
-//  押し込み・引き寄せ・左右移動 → 相手の次の攻撃-10 / 移動不可 → 自分に防御20 / 味方を移動 → 自分の次の攻撃+20
-//  敵を即死 → 相手に防御貫通100 / 自分が即死 → このダイスが壊れる / 最後列に移動 → 狙撃の構え / デコイHP40 → 防御40
+// 読み替えの決まりは ダイスオークション_システム設計書.md の第7章。陣形の代わりに「持っているダイスの数」と「相手のダイスそのもの」に作用させる:
+//  範囲攻撃 → 相手のダイスの数だけ当たる / 味方全体 → 自分のダイスの数で伸びる / 押し込み → 相手のダイスを押し出す
+//  引き寄せ → 相手のダイスを奪って次の番に自分が振る / 左右移動 → 相手の出目をずらす / 移動不可 → 動かされない
+//  味方を移動 → 自分のダイスを振り直す / デコイ → デコイのダイスが増える / 敵後列を即死 → 相手のダイスを壊す
 // f[面] は効果のリスト。説明文は効果から自動で作るので、数値だけ書き換えれば表示も変わる。
 const A = n => ({ op: 'dmg', n }), AP = n => ({ op: 'dmg', n, pierce: true }), AS = n => ({ op: 'dmg', n, snipe: true });
+// 範囲攻撃: row = 相手のダイスの数だけ(最大3回) / all = 相手のダイスの数だけ / two = 相手のダイスが2個以上なら2回
+const AROW = n => ({ op: 'dmg', n, area: 'row' }), AALL = n => ({ op: 'dmg', n, area: 'all' }), ATWO = (n, pierce) => ({ op: 'dmg', n, area: 'two', ...(pierce ? { pierce } : {}) });
 const SELF = n => ({ op: 'self', n }), HEAL = n => ({ op: 'heal', n }), GUARD = n => ({ op: 'guard', n });
-const POISON = n => ({ op: 'poison', n }), BUFF = n => ({ op: 'buff', n }), WEAK = n => ({ op: 'weaken', n }), VULN = n => ({ op: 'vuln', n });
-const MISS = { op: 'miss' }, UNGUARD = { op: 'unguard' }, BREAK = { op: 'break' }, STANCE = { op: 'stance' };
+const POISON = n => ({ op: 'poison', n }), WEAK = n => ({ op: 'weaken', n }), VULN = n => ({ op: 'vuln', n });
+const RALLY = n => ({ op: 'rally', n }), HEALPER = n => ({ op: 'healper', n }), GUARDPER = n => ({ op: 'guardper', n });
+const MISS = { op: 'miss' }, UNGUARD = { op: 'unguard' }, BREAK = { op: 'break' }, STANCE = { op: 'stance' }, DECOY = { op: 'decoy' }, KILL = { op: 'kill' };
+const PUSH1 = { op: 'push', first: true }, PUSH = { op: 'push' }, PULL = { op: 'pull' }, SHIFT = { op: 'shift' }, PARALYZE = { op: 'paralyze' };
+const IMMOVABLE = { op: 'immovable' }, REROLL = { op: 'reroll' };
 const DICE_POOL = [
   { id: 'olive',     name: 'オリーブ', job: 'ファイター',     f: { 1: [MISS], 2: [MISS], 3: [A(80)], 4: [A(80)], 5: [A(120)], 6: [A(120)] } },
   { id: 'fang',      name: 'ファング', job: 'バーサーカー',   f: { 1: [MISS], 2: [A(60), SELF(20)], 3: [A(80), SELF(20)], 4: [A(100), SELF(40)], 5: [A(120), SELF(60)], 6: [A(140), SELF(80)] } },
-  { id: 'chilchil',  name: 'チルチル', job: 'グラップラー',   f: { 1: [A(40)], 2: [A(40), WEAK(10)], 3: [A(60)], 4: [A(60), WEAK(10)], 5: [A(80)], 6: [A(80), WEAK(10)] } },
-  { id: 'godo',      name: 'ゴドー',   job: 'ソルジャー',     f: { 1: [A(20)], 2: [A(40), GUARD(20)], 3: [A(40)], 4: [A(60), GUARD(20)], 5: [A(60)], 6: [A(80), GUARD(20)] } },
+  { id: 'chilchil',  name: 'チルチル', job: 'グラップラー',   f: { 1: [A(40)], 2: [A(40), PUSH1], 3: [A(60)], 4: [A(60), PUSH1], 5: [A(80)], 6: [A(80), PUSH1] },
+    passive: '溜め込み: 持ち主が受けたダメージを溜めて、チルチルの次の攻撃に上乗せする' },
+  { id: 'godo',      name: 'ゴドー',   job: 'ソルジャー',     f: { 1: [A(20)], 2: [A(40), IMMOVABLE], 3: [A(40)], 4: [A(60), IMMOVABLE], 5: [A(60)], 6: [A(80), IMMOVABLE] } },
   { id: 'lunaluna',  name: 'ルナルナ', job: 'ウォリアー',     f: { 1: [A(20)], 2: [A(20), GUARD(20)], 3: [A(40)], 4: [A(40), GUARD(20)], 5: [A(60)], 6: [A(60), GUARD(20)] } },
   { id: 'dragon',    name: 'ドラゴン', job: 'ブラッドナイト', f: { 1: [A(20), HEAL(20)], 2: [A(20), HEAL(20)], 3: [A(20), HEAL(20)], 4: [A(40), HEAL(20)], 5: [A(40), HEAL(20)], 6: [A(60), HEAL(20)] } },
-  { id: 'jay',       name: 'ジェイ',   job: 'アサシン',       f: { 1: [BREAK], 2: [SELF(60)], 3: [AP(60)], 4: [AP(60)], 5: [AP(100)], 6: [AP(100)] } },
-  { id: 'chaco',     name: 'チャコ',   job: 'ガーディアン',   f: { 1: [A(40)], 2: [A(40)], 3: [GUARD(20)], 4: [GUARD(40)], 5: [GUARD(60)], 6: [GUARD(40)] } },
-  { id: 'rock',      name: 'ロック',   job: 'エンジニア',     f: { 1: [A(40)], 2: [A(40)], 3: [GUARD(20)], 4: [GUARD(20)], 5: [GUARD(40)], 6: [GUARD(40)] } },
-  { id: 'shinonome', name: 'シノノメ', job: '炎メイジ',       f: { 1: [A(30)], 2: [A(50)], 3: [A(30)], 4: [A(30)], 5: [A(50)], 6: [A(50)] } },
-  { id: 'indra',     name: 'インドラ', job: '雷メイジ',       f: { 1: [A(30)], 2: [A(50)], 3: [A(30)], 4: [A(30)], 5: [A(50)], 6: [A(50)] } },
-  { id: 'ruma',      name: 'ルマ',     job: 'デモニスト',     f: { 1: [SELF(60)], 2: [SELF(60)], 3: [A(20), SELF(20)], 4: [A(40), SELF(40)], 5: [A(60), SELF(60)], 6: [A(80), SELF(80)] } },
+  { id: 'jay',       name: 'ジェイ',   job: 'アサシン',       f: { 1: [BREAK], 2: [SELF(60)], 3: [AP(60)], 4: [AP(60)], 5: [KILL], 6: [KILL] } },
+  { id: 'chaco',     name: 'チャコ',   job: 'ガーディアン',   f: { 1: [A(40)], 2: [A(40)], 3: [GUARD(20)], 4: [GUARD(40)], 5: [GUARD(60)], 6: [GUARDPER(10)] } },
+  { id: 'rock',      name: 'ロック',   job: 'エンジニア',     f: { 1: [A(40)], 2: [A(40)], 3: [GUARD(20)], 4: [GUARD(20)], 5: [DECOY], 6: [DECOY] } },
+  { id: 'shinonome', name: 'シノノメ', job: '炎メイジ',       f: { 1: [A(30)], 2: [A(50)], 3: [AROW(30)], 4: [AROW(30)], 5: [AROW(50)], 6: [AROW(50)] } },
+  { id: 'indra',     name: 'インドラ', job: '雷メイジ',       f: { 1: [A(30)], 2: [A(50)], 3: [AROW(30)], 4: [AROW(30)], 5: [AROW(50), PARALYZE], 6: [AROW(50), PARALYZE] } },
+  { id: 'ruma',      name: 'ルマ',     job: 'デモニスト',     f: { 1: [SELF(60)], 2: [SELF(60)], 3: [AALL(20), SELF(20)], 4: [AALL(40), SELF(40)], 5: [AALL(60), SELF(60)], 6: [AALL(80), SELF(80)] } },
   { id: 'teruru',    name: 'テルル',   job: 'スナイパー',     f: { 1: [STANCE], 2: [STANCE], 3: [AS(20)], 4: [AS(40)], 5: [AS(60)], 6: [AS(80)] } },
-  { id: 'cocon',     name: 'ココン',   job: 'シャーマン',     f: { 1: [A(20)], 2: [A(20)], 3: [HEAL(20)], 4: [HEAL(20)], 5: [HEAL(40)], 6: [HEAL(40)] } },
+  { id: 'cocon',     name: 'ココン',   job: 'シャーマン',     f: { 1: [A(20)], 2: [A(20)], 3: [HEALPER(5)], 4: [HEALPER(5)], 5: [HEALPER(10)], 6: [HEALPER(10)] } },
   { id: 'yue',       name: 'ユエ',     job: 'セージ',         f: { 1: [A(20)], 2: [A(20)], 3: [HEAL(40)], 4: [HEAL(60)], 5: [HEAL(60)], 6: [HEAL(80)] } },
-  { id: 'cafe',      name: 'カフェ',   job: 'ダンサー',       f: { 1: [A(40)], 2: [A(60)], 3: [HEAL(40)], 4: [GUARD(40)], 5: [HEAL(60)], 6: [BUFF(20)] } },
-  { id: 'kashu',     name: 'カシュー', job: 'バード',         f: { 1: [A(20)], 2: [A(20)], 3: [BUFF(20)], 4: [BUFF(20)], 5: [BUFF(40)], 6: [BUFF(40)] } },
-  { id: 'moni',      name: 'モニ',     job: 'トリックスター', f: { 1: [A(20), WEAK(10)], 2: [A(20), WEAK(10)], 3: [A(10), WEAK(10)], 4: [A(20), WEAK(10)], 5: [A(20), WEAK(10)], 6: [A(10), WEAK(10)] } },
-  { id: 'nano',      name: 'ナノ',     job: 'ウィッチ',       f: { 1: [A(20), WEAK(10)], 2: [A(20), WEAK(10)], 3: [A(20), VULN(20)], 4: [A(20), VULN(20)], 5: [A(20), WEAK(20)], 6: [A(20), WEAK(20)] } },
-  { id: 'dean',      name: 'ディーン', job: 'スカウト',       f: { 1: [A(20), WEAK(10)], 2: [A(30), WEAK(10)], 3: [A(30), WEAK(10)], 4: [AP(20)], 5: [AP(20)], 6: [AP(20)] } },
+  { id: 'cafe',      name: 'カフェ',   job: 'ダンサー',       f: { 1: [A(40)], 2: [A(60)], 3: [HEAL(40)], 4: [GUARD(40)], 5: [HEAL(60)], 6: [REROLL] } },
+  { id: 'kashu',     name: 'カシュー', job: 'バード',         f: { 1: [A(20)], 2: [A(20)], 3: [RALLY(10)], 4: [RALLY(10)], 5: [RALLY(20)], 6: [RALLY(20)] } },
+  { id: 'moni',      name: 'モニ',     job: 'トリックスター', f: { 1: [A(20), PUSH], 2: [A(20), PUSH], 3: [ATWO(10), PUSH], 4: [A(20), PULL], 5: [A(20), PULL], 6: [ATWO(10), PULL] } },
+  { id: 'nano',      name: 'ナノ',     job: 'ウィッチ',       f: { 1: [A(20), SHIFT], 2: [ATWO(20), SHIFT], 3: [A(20), VULN(20)], 4: [ATWO(20), VULN(20)], 5: [A(20), WEAK(20)], 6: [ATWO(20), WEAK(20)] } },
+  { id: 'dean',      name: 'ディーン', job: 'スカウト',       f: { 1: [A(20), SHIFT], 2: [A(30), SHIFT], 3: [ATWO(30), SHIFT], 4: [AP(20)], 5: [AP(20)], 6: [ATWO(20, true)] } },
   { id: 'maiyu',     name: 'マイユ',   job: 'ウォーロック',   f: { 1: [UNGUARD], 2: [UNGUARD, A(20)], 3: [UNGUARD, A(20)], 4: [UNGUARD, A(40)], 5: [UNGUARD, A(40)], 6: [UNGUARD, A(60)] } },
   { id: 'sai',       name: 'サイ',     job: '闇医者',         f: { 1: [A(20)], 2: [A(20), POISON(20)], 3: [A(20)], 4: [A(20), POISON(20)], 5: [A(20), HEAL(20)], 6: [A(20), POISON(20)] } },
-  { id: 'bei',       name: 'ベイ',     job: 'ゴースト',       f: { 1: [BUFF(20)], 2: [A(100)], 3: [BUFF(20)], 4: [A(120)], 5: [BUFF(20)], 6: [A(140)] } },
-  { id: 'fon',       name: 'フォン',   job: 'ガンナー',       f: { 1: [A(20)], 2: [A(30)], 3: [A(40)], 4: [A(50)], 5: [A(60)], 6: [A(70)] } },
+  { id: 'bei',       name: 'ベイ',     job: 'ゴースト',       f: { 1: [REROLL], 2: [A(100)], 3: [REROLL], 4: [A(120)], 5: [REROLL], 6: [A(140)] } },
+  { id: 'fon',       name: 'フォン',   job: 'ガンナー',       f: { 1: [ATWO(20)], 2: [ATWO(30)], 3: [ATWO(40)], 4: [ATWO(50)], 5: [ATWO(60)], 6: [ATWO(70)] } },
 ];
 for (const d of DICE_POOL) d.img = `chars/${d.id}.webp`;
+// ロックが作るデコイのダイス(競りには出ない)。1人 DECOY_MAX 個まで。decoy1〜3 は decoy と同じ面を使う
+const DECOY_MAX = 3;
+const DECOY_DIE = { id: 'decoy', name: 'デコイ', job: 'ロックのデコイ', img: 'chars/rock.webp', f: { 1: [A(10)], 2: [A(10)], 3: [A(10)], 4: [A(10)], 5: [A(10)], 6: [A(10)] } };
+// 番のはじめ(どのダイスの効果よりも前)にまとめて効く効果
+const PRE_OPS = ['reroll', 'rally'];
 
 const MODES = {
   gachi:  { label: '開示あり(ガチ版)',   reveal: true },
   fuzake: { label: '開示なし(ふざけ版)', reveal: false },
 };
 const DIE = {};
-for (const d of DICE_POOL) DIE[d.id] = d;
+for (const d of [...DICE_POOL, DECOY_DIE]) DIE[d.id] = d;
+for (let i = 1; i <= DECOY_MAX; i++) DIE['decoy' + i] = { ...DECOY_DIE, id: 'decoy' + i, name: `デコイ${i}` };
+const isDecoy = id => /^decoy\d/.test(id);
 
 // 調整値。{ 'ダイスid~面~効果の番号~n': 90, 'rule~life': 10 } の形で定義テーブルの数値を上書きする
 // ゲーム開始時にホストの調整値を pub/start.tune に入れて配るので、両クライアントで同じ値になる
@@ -386,7 +401,7 @@ const RULE_BASE = { life: LIFE_PER_CHIP };
 const RULE = { ...RULE_BASE };
 const RULE_LABEL = { life: 'ライフ = 残りチップ×' };
 const BASE_F = {};
-for (const id in DIE) BASE_F[id] = JSON.stringify(DIE[id].f);
+for (const id in DIE) if (!isDecoy(id)) BASE_F[id] = JSON.stringify(DIE[id].f);
 function tuneValue(key, v) {
   v = Number(v);
   if (!Number.isFinite(v)) return null;
@@ -410,13 +425,26 @@ function tunedRule(tune) {
   return r;
 }
 function applyTune(tune) {
-  for (const id in DIE) DIE[id].f = tunedFaces(id, tune);
+  for (const id in BASE_F) DIE[id].f = tunedFaces(id, tune);
+  for (let i = 1; i <= DECOY_MAX; i++) DIE['decoy' + i].f = DIE.decoy.f;
   Object.assign(RULE, tunedRule(tune));
 }
 
 // 説明文(長い方は一覧・技名の札、短い方はダイスの面と小さな表示)
 const FX_TEXT = {
-  dmg: f => `相手に${f.pierce ? '防御貫通' : ''}${f.n}ダメージ` + (f.snipe ? '(狙撃の構えなら2倍)' : ''),
+  dmg: f => `相手に${f.pierce ? '防御貫通' : ''}${f.n}ダメージ` + (f.snipe ? '(狙撃の構えなら2倍)' : '')
+    + (f.area === 'row' ? '×相手のダイスの数(最大3回)' : f.area === 'all' ? '×相手のダイスの数' : f.area === 'two' ? '(相手のダイスが2個以上なら2回)' : ''),
+  rally: f => `この番の自分の攻撃すべて+${f.n}(先に効果を出すダイスにも効く)`,
+  healper: f => `自分のダイス1個につき${f.n}回復`,
+  guardper: f => `自分のダイス1個につき防御${f.n}`,
+  decoy: () => `デコイのダイスを1個増やす(全部の面が相手に10ダメージ、${DECOY_MAX}個まで)`,
+  kill: () => '相手が最後に落札したダイスを壊す(デコイがあればデコイから)',
+  push: f => f.first ? '相手が最初に落札したダイスを押し出す(次の番振れない)' : '相手のダイス1個を押し出す(次の番振れない)',
+  pull: () => '相手のダイス1個を引き寄せる(次の自分の番に自分が振る)',
+  shift: () => '相手のダイス1個の、次に出る目を1つ下げる',
+  paralyze: () => '相手のダイス1個を麻痺させる(次の番振れない)',
+  immovable: () => '移動不可(相手の次の番まで、自分のダイスは動かされない)',
+  reroll: () => 'この番に一番小さい目が出たほかの自分のダイスを振り直す',
   self: f => `自分に${f.n}ダメージ`,
   heal: f => `自分を${f.n}回復`,
   guard: f => `自分に防御${f.n}(次に受けるダメージを${f.n}減らす)`,
@@ -430,7 +458,18 @@ const FX_TEXT = {
   stance: () => '狙撃の構え(このダイスの攻撃が以後2倍)',
 };
 const FX_SHORT = {
-  dmg: f => `${f.pierce ? '貫通' : ''}${f.n}ダメ` + (f.snipe ? '(構え×2)' : ''),
+  dmg: f => `${f.pierce ? '貫通' : ''}${f.n}ダメ` + (f.snipe ? '(構え×2)' : '') + (f.area === 'row' ? '×数(最大3)' : f.area === 'all' ? '×数' : f.area === 'two' ? '×2' : ''),
+  rally: f => `全攻撃+${f.n}`,
+  healper: f => `回復${f.n}×数`,
+  guardper: f => `防御${f.n}×数`,
+  decoy: () => 'デコイ+1',
+  kill: () => 'ダイス破壊',
+  push: () => '押し出し',
+  pull: () => '引き寄せ',
+  shift: () => '出目ずらし',
+  paralyze: () => '麻痺',
+  immovable: () => '移動不可',
+  reroll: () => '振り直し',
   self: f => `自傷${f.n}`,
   heal: f => `回復${f.n}`,
   guard: f => `防御${f.n}`,
@@ -544,19 +583,29 @@ function derive(pub, rev) {
 }
 
 // ---------------- バトルのシミュレーション ----------------
-// 1ターン = 両者が1回ずつ番を持つ。番の人は持っているダイスを全部同時に振り、落札した順に効果が出る。
-// turns[i] は片方の番。rolls はその番に振ったダイスと出目、steps は1つずつの出来事(ダイス1個分・毒)。
+// 1ターン = 両者が1回ずつ番を持つ。番の人は使えるダイスを全部同時に振る。
+//  使えるダイス = 落札したダイス(壊れた・押し出された・麻痺・奪われ中を除く) + 引き寄せて借りているダイス + デコイ
+// 振ったあと、出目ずらし → 振り直し → この番の攻撃強化(カシュー) を先に済ませ、それから落札した順に1個ずつ効果が出る。
+// turns[i] は片方の番。rolls はその番に振ったダイスと(ずらし・振り直しのあとの)出目、steps は1つずつの出来事。
 function simulate(owned, life, rng) {
   const P = {};
-  for (const r of ['host', 'guest']) P[r] = { life: life[r], max: life[r], guard: 0, buff: 0, weaken: 0, vuln: 0, poison: 0, broken: [], stance: [] };
+  for (const r of ['host', 'guest']) P[r] = {
+    life: life[r], max: life[r], guard: 0, buff: 0, weaken: 0, vuln: 0, poison: 0, broken: [], stance: [],
+    decoys: [], out: [], lent: [], borrow: [], borrowNext: [], shift: [], immovable: false, stock: 0,
+  };
   const tied = life.host === life.guest;
   const first = tied ? (rng() < 0.5 ? 'host' : 'guest') : (life.host < life.guest ? 'host' : 'guest');
   const turns = [];
   let result = null;
+  const roll = () => 1 + Math.floor(rng() * FACES);
 
   const snap = () => {
     const s = {};
-    for (const r in P) s[r] = { life: P[r].life, guard: P[r].guard, buff: P[r].buff, weaken: P[r].weaken, vuln: P[r].vuln, poison: P[r].poison, broken: [...P[r].broken], stance: [...P[r].stance] };
+    for (const r in P) {
+      const X = P[r];
+      s[r] = { life: X.life, guard: X.guard, buff: X.buff, weaken: X.weaken, vuln: X.vuln, poison: X.poison, broken: [...X.broken], stance: [...X.stance],
+        decoys: [...X.decoys], out: X.out.map(o => ({ ...o })), lent: [...X.lent], borrow: [...X.borrow, ...X.borrowNext], shift: [...X.shift], immovable: X.immovable, stock: X.stock };
+    }
     return s;
   };
   const judge = () => {
@@ -568,34 +617,72 @@ function simulate(owned, life, rng) {
   };
   // 演出用: 直前に書いた1行に「何が起きたか」を添える(li は対応する行、life はその時点のライフ)
   const E = (L, o) => { (L.ev ||= []).push({ ...o, li: L.length - 1, life: { host: P.host.life, guest: P.guest.life } }); };
+  const nm = id => DIE[id].name;
+  // そのダイスの持ち主(デコイは作った人、借りているダイスは貸した人)
+  const ownerOf = id => (owned.host.includes(id) || P.host.decoys.includes(id)) ? 'host' : 'guest';
+  // ライフを減らす。チルチルを持っていれば、受けたダメージを溜める
+  const hurt = (r, n) => {
+    P[r].life -= n;
+    if (n > 0 && owned[r].includes('chilchil') && !P[r].broken.includes('chilchil')) P[r].stock += n;
+  };
+  // 相手が持っているダイスの数(範囲攻撃の当たる回数。壊れたものは数えない)
+  const diceCount = r => owned[r].filter(id => !P[r].broken.includes(id)).length + P[r].decoys.length;
+  // 動かす効果の対象になる相手のダイス(壊れた・すでに押し出し/奪われ中のものは除く)
+  const movable = r => [...owned[r].filter(id => !P[r].broken.includes(id) && !P[r].lent.includes(id) && !P[r].out.some(o => o.id === id)), ...P[r].decoys.filter(id => !P[r].out.some(o => o.id === id))];
   // 相手への攻撃: 弱体 → 強化 → 被ダメージ増加 → 防御 の順にかける(Formation Battle Encounter と同じ)
-  const attack = (me, f, id, L) => {
+  const attack = (me, f, id, L, ctx) => {
     const t = other(me), A = P[me], D = P[t];
     let n = f.n;
     const notes = [];
     if (f.snipe && A.stance.includes(id)) { n *= 2; notes.push('狙撃の構えで2倍'); }
+    if (id === 'chilchil' && A.stock) { n += A.stock; notes.push(`溜め込み+${A.stock}`); A.stock = 0; }
+    if (ctx.rally) { n += ctx.rally; notes.push(`全攻撃+${ctx.rally}`); }
     if (A.weaken) { n = Math.max(0, n - A.weaken); notes.push(`弱体-${A.weaken}`); A.weaken = 0; }
     if (A.buff) { n += A.buff; notes.push(`強化+${A.buff}`); A.buff = 0; }
     if (D.vuln) { n += D.vuln; notes.push(`被ダメ+${D.vuln}`); D.vuln = 0; }
     let reduced = 0;
     if (!f.pierce && D.guard) { reduced = Math.min(D.guard, n); n -= reduced; D.guard = 0; }
-    D.life -= n;
+    hurt(t, n);
     const memo = [...notes, reduced ? `防御で${reduced}軽減` : '', f.pierce ? '防御貫通' : ''].filter(Boolean);
     L.push(`${R(t)}に${n}ダメージ${memo.length ? `(${memo.join('・')})` : ''}`);
-    E(L, n === 0 && reduced ? { t: 'block', from: me, to: t, reduced } : { t: 'hit', from: me, to: t, n, reduced, pierce: !!f.pierce, power: notes.length > 0 && n > f.n });
+    E(L, n === 0 && reduced ? { t: 'block', from: me, to: t, reduced } : { t: 'hit', from: me, to: t, n, reduced, pierce: !!f.pierce, power: n > f.n });
   };
-  function resolve(me, id, face, L) {
+  // 相手のダイスを動かす(押し出し・麻痺・引き寄せ・出目ずらし)。移動不可なら動かない
+  const move = (me, kind, L, pickFirst) => {
+    const op = other(me), O = P[op];
+    const label = { push: '押し出し', paralyze: '麻痺', pull: '引き寄せ', shift: '出目ずらし' }[kind];
+    if (O.immovable && kind !== 'paralyze') { L.push(`${R(op)}のダイスは移動不可で動かなかった`); E(L, { t: 'resist', from: me, to: op }); return; }
+    const cands = kind === 'shift' ? movable(op).filter(id => !O.shift.includes(id)) : movable(op);
+    if (!cands.length) { L.push(`${label}できる${R(op)}のダイスがない`); E(L, { t: 'none', to: me }); return; }
+    const id = pickFirst ? cands[0] : cands[Math.floor(rng() * cands.length)];
+    if (kind === 'push' || kind === 'paralyze') { O.out.push({ id, why: label }); L.push(`${R(op)}の${nm(id)}を${kind === 'push' ? '押し出した' : '麻痺させた'}(次の番振れない)`); }
+    else if (kind === 'pull') { O.lent.push(id); P[me].borrowNext.push(id); L.push(`${R(op)}の${nm(id)}を引き寄せた(次の番は${R(me)}が振る)`); }
+    else { O.shift.push(id); L.push(`${R(op)}の${nm(id)}の次の出目を1つ下げる`); }
+    E(L, { t: kind, from: me, to: op, id });
+  };
+  function resolve(me, id, face, L, ctx) {
     const op = other(me), M = P[me], O = P[op];
     for (const f of DIE[id].f[face]) {
       switch (f.op) {
-        case 'dmg': attack(me, f, id, L); break;
-        case 'self': M.life -= f.n; L.push(`${R(me)}に${f.n}ダメージ(自傷)`); E(L, { t: 'hit', from: me, to: me, n: f.n }); break;
-        case 'heal': {
-          const v = Math.max(0, Math.min(f.n, M.max - M.life));
-          M.life += v; L.push(v > 0 ? `${R(me)}が${v}回復` : `${R(me)}は回復しなかった(最大ライフ)`); E(L, { t: 'heal', to: me, n: v });
+        case 'dmg': {
+          const c = diceCount(op);
+          const hits = f.area === 'row' ? Math.max(1, Math.min(3, c)) : f.area === 'all' ? Math.max(1, c) : f.area === 'two' && c >= 2 ? 2 : 1;
+          if (hits > 1) { L.push(`${R(op)}のダイス${c}個に${hits}回当たる`); E(L, { t: 'area', from: me, to: op, hits }); }
+          for (let h = 0; h < hits; h++) attack(me, f, id, L, ctx);
           break;
         }
-        case 'guard': M.guard = Math.max(M.guard, f.n); L.push(`${R(me)}に防御${M.guard}`); E(L, { t: 'guard', to: me }); break;
+        case 'self': hurt(me, f.n); L.push(`${R(me)}に${f.n}ダメージ(自傷)`); E(L, { t: 'hit', from: me, to: me, n: f.n }); break;
+        case 'heal': case 'healper': {
+          const amt = f.op === 'healper' ? f.n * ctx.count : f.n;
+          const v = Math.max(0, Math.min(amt, M.max - M.life));
+          M.life += v; L.push((f.op === 'healper' ? `ダイス${ctx.count}個×${f.n} → ` : '') + (v > 0 ? `${R(me)}が${v}回復` : `${R(me)}は回復しなかった(最大ライフ)`)); E(L, { t: 'heal', to: me, n: v });
+          break;
+        }
+        case 'guard': case 'guardper': {
+          const g = f.op === 'guardper' ? f.n * ctx.count : f.n;
+          M.guard = Math.max(M.guard, g); L.push((f.op === 'guardper' ? `ダイス${ctx.count}個×${f.n} → ` : '') + `${R(me)}に防御${M.guard}`); E(L, { t: 'guard', to: me });
+          break;
+        }
         case 'poison': O.poison = Math.max(O.poison, f.n); L.push(`${R(op)}に毒${O.poison}`); E(L, { t: 'poison', from: me, to: op }); break;
         case 'buff': M.buff = Math.max(M.buff, f.n); L.push(`${R(me)}の次の攻撃+${M.buff}`); E(L, { t: 'buff', to: me }); break;
         case 'weaken': O.weaken = Math.max(O.weaken, f.n); L.push(`${R(op)}の次の攻撃-${O.weaken}`); E(L, { t: 'weaken', from: me, to: op }); break;
@@ -605,37 +692,100 @@ function simulate(owned, life, rng) {
           E(L, { t: 'unguard', from: me, to: op });
           break;
         case 'miss': L.push('ミス'); E(L, { t: 'none', to: me }); break;
-        case 'break': M.broken.push(id); L.push(`${DIE[id].name}のダイスが壊れた`); E(L, { t: 'break', to: me }); break;
+        case 'break': { const ow = ownerOf(id); P[ow].broken.push(id); L.push(`${nm(id)}のダイスが壊れた`); E(L, { t: 'break', to: ow }); break; }
         case 'stance':
           if (!M.stance.includes(id)) M.stance.push(id);
           L.push('狙撃の構え(このダイスの攻撃が以後2倍)'); E(L, { t: 'stance', to: me });
           break;
+        case 'decoy': {
+          // デコイの id は2人で共通の decoy1〜3(借りたロックで相手がデコイを作ることもあるため)
+          const k = [1, 2, 3].slice(0, DECOY_MAX).find(k => !M.decoys.includes('decoy' + k) && !O.decoys.includes('decoy' + k));
+          if (M.decoys.length >= DECOY_MAX || !k) { L.push(`デコイはもう置けない(${DECOY_MAX}個まで)`); E(L, { t: 'none', to: me }); break; }
+          M.decoys.push('decoy' + k); L.push(`デコイ${k}のダイスが増えた(次の番から一緒に振る)`); E(L, { t: 'decoy', to: me });
+          break;
+        }
+        case 'kill': {
+          let target = O.decoys[O.decoys.length - 1];
+          if (target) { O.decoys.pop(); O.out = O.out.filter(o => o.id !== target); }
+          else {
+            target = [...owned[op]].reverse().find(x => !O.broken.includes(x));
+            if (target) { O.broken.push(target); O.lent = O.lent.filter(x => x !== target); }
+          }
+          if (target) { L.push(`${R(op)}の${nm(target)}のダイスを壊した`); E(L, { t: 'kill', from: me, to: op, id: target }); }
+          else { L.push(`${R(op)}に壊せるダイスがない`); E(L, { t: 'none', to: me }); }
+          break;
+        }
+        case 'push': move(me, 'push', L, f.first); break;
+        case 'paralyze': move(me, 'paralyze', L, false); break;
+        case 'pull': move(me, 'pull', L, false); break;
+        case 'shift': move(me, 'shift', L, false); break;
+        case 'immovable': M.immovable = true; L.push(`${R(me)}のダイスは相手の次の番まで動かされない`); E(L, { t: 'immovable', to: me }); break;
+        case 'reroll': case 'rally': break; // 番のはじめに済ませている
       }
     }
   }
 
   outer:
   for (let t = 0; t < TURN_LIMIT * 2; t++) {
-    const me = t % 2 === 0 ? first : other(first);
-    const dice = owned[me].filter(id => !P[me].broken.includes(id));
-    const T = { role: me, round: Math.floor(t / 2) + 1, rolls: dice.map(id => ({ id, face: 1 + Math.floor(rng() * FACES) })), steps: [] };
+    const me = t % 2 === 0 ? first : other(first), op = other(me), M = P[me];
+    M.immovable = false; // 自分の番が来たら移動不可は切れる
+    const alive = id => isDecoy(id) ? P.host.decoys.includes(id) || P.guest.decoys.includes(id) : !P[ownerOf(id)].broken.includes(id);
+    const usable = id => alive(id) && !M.out.some(o => o.id === id);
+    const ids = [...owned[me].filter(id => usable(id) && !M.lent.includes(id)), ...M.borrow.filter(usable), ...M.decoys.filter(usable)];
+    const T = { role: me, round: Math.floor(t / 2) + 1, rolls: ids.map(id => ({ id, face: roll() })), steps: [] };
     turns.push(T);
+    const ctx = { rally: 0, count: T.rolls.length };
+    // 出目ずらし(相手に付けられたもの)
+    for (const r of T.rolls) {
+      if (!M.shift.includes(r.id)) continue;
+      const from = r.face; r.face = Math.max(1, r.face - 1);
+      const L = [from === r.face ? `${nm(r.id)}は出目ずらしを受けたが、1なので変わらない` : `${nm(r.id)}の出目がずらされた(${from}→${r.face})`]; E(L, { t: 'shifted', to: me });
+      T.steps.push({ kind: 'pre', i: T.rolls.indexOf(r), id: r.id, face: r.face, lines: L, ev: L.ev, snap: snap() });
+    }
+    // 振り直し(ベイ・カフェ): 一番小さい目が出た、ほかの自分のダイスを振り直す
+    const pre = T.rolls.map(r => DIE[r.id].f[r.face].some(f => f.op === 'reroll'));
+    T.rolls.forEach((r, i) => {
+      if (!pre[i]) return;
+      const cands = T.rolls.filter((x, k) => k !== i && !pre[k]);
+      const L = [];
+      if (!cands.length) { L.push('振り直すダイスがない'); E(L, { t: 'none', to: me }); }
+      else {
+        const x = cands.reduce((a, b) => (b.face < a.face ? b : a));
+        const from = x.face; x.face = roll();
+        L.push(`${nm(x.id)}を振り直した(${from}→${x.face})`); E(L, { t: 'reroll', to: me });
+      }
+      T.steps.push({ kind: 'pre', i, id: r.id, face: r.face, lines: L, ev: L.ev, snap: snap() });
+    });
+    // この番の攻撃強化(カシュー): 先に効果を出すダイスにも効く
+    T.rolls.forEach((r, i) => {
+      if (pre[i]) return;
+      const fs = DIE[r.id].f[r.face].filter(f => f.op === 'rally');
+      if (!fs.length) return;
+      for (const f of fs) ctx.rally += f.n;
+      const L = [`この番の${R(me)}の攻撃すべて+${ctx.rally}`]; E(L, { t: 'rally', to: me });
+      T.steps.push({ kind: 'pre', i, id: r.id, face: r.face, lines: L, ev: L.ev, snap: snap() });
+    });
     if (!T.rolls.length) T.steps.push({ kind: 'none', lines: ['振れるダイスがない'], ev: [], snap: snap() });
     for (let i = 0; i < T.rolls.length; i++) {
       const { id, face } = T.rolls[i];
+      if (pre[i] || DIE[id].f[face].every(f => PRE_OPS.includes(f.op))) continue; // 番のはじめに済んだダイス
       const step = { kind: 'die', i, id, face, lines: [] };
-      resolve(me, id, face, step.lines);
+      resolve(me, id, face, step.lines, ctx);
       step.ev = step.lines.ev || []; step.snap = snap();
       T.steps.push(step);
       if ((result = judge())) break outer;
     }
     // 番の終わり: 毒が回る(防御では防げない)
-    if (P[me].poison) {
+    if (M.poison) {
       const L = [];
-      P[me].life -= P[me].poison; L.push(`${R(me)}に${P[me].poison}ダメージ(毒)`); E(L, { t: 'hit', from: me, to: me, n: P[me].poison, src: 'poison' });
+      hurt(me, M.poison); L.push(`${R(me)}に${M.poison}ダメージ(毒)`); E(L, { t: 'hit', from: me, to: me, n: M.poison, src: 'poison' });
       T.steps.push({ kind: 'poison', lines: L, ev: L.ev, snap: snap() });
       if ((result = judge())) break outer;
     }
+    // 番の終わりの後始末: 押し出し・麻痺・出目ずらしはこの番で終わり。借りていたダイスを返し、新しく引き寄せたものを次の番に回す
+    M.out = []; M.shift = [];
+    for (const id of M.borrow) P[op].lent = P[op].lent.filter(x => x !== id);
+    M.borrow = M.borrowNext; M.borrowNext = [];
   }
   if (!result) {
     const h = P.host.life, g = P.guest.life;
@@ -1059,7 +1209,7 @@ function showBanner(role, st) {
     head = `<b>${who(role)}</b>の番`;
     name = '<div class="bn tick">振れるダイスがない</div>';
   } else {
-    head = `<b>${who(role)}</b>の${esc(DIE[st.id].name)} ・ ${st.face}の目`;
+    head = `<b>${who(role)}</b>の${esc(DIE[st.id].name)} ・ ${st.face}の目${st.kind === 'pre' ? ' ・ 番のはじめ' : ''}`;
     name = `<div class="bn">${esc(faceShort(st.id, st.face))}</div>`;
     eff = `<div class="be">${esc(faceDesc(st.id, st.face))}</div>`;
   }
@@ -1213,6 +1363,33 @@ async function fxPlay(ev, apply) {
     case 'stance': apply(); fxRing(ev.to, 'gold'); fxPop(ev.to, '🎯 狙撃の構え', 'gold'); break;
     case 'break': apply(); fxSeat(ev.to, 'trip'); fxPop(ev.to, '💥 ダイスが壊れた', 'dim', 1100); play('hit', { gain: 0.4, rate: 0.6 }); break;
     case 'none': apply(); fxPop(ev.to, 'ミス', 'dim'); break;
+    case 'area': apply(); fxRing(ev.to, 'self'); fxPop(ev.to, `💥 ×${ev.hits}`, 'fire', 900); await sleep(200); break;
+    case 'push': case 'paralyze':
+      await fxFly(ev.t === 'push' ? 'weak' : 'poison', ev.from, ev.to, ev.t === 'push' ? '➜' : '⚡');
+      apply(); fxSeat(ev.to, 'trip'); fxRing(ev.to, ev.t === 'push' ? 'gold' : 'poison');
+      fxPop(ev.to, `${ev.t === 'push' ? '押し出し' : '⚡ 麻痺'}: ${DIE[ev.id].name}`, ev.t === 'push' ? 'gold' : 'poison', 1100);
+      play('hit', { gain: 0.4, rate: 1.3 });
+      break;
+    case 'pull':
+      await fxFly('copy', ev.to, ev.from, '🧲');
+      apply(); fxRing(ev.from, 'gold'); fxPop(ev.from, `引き寄せ: ${DIE[ev.id].name}`, 'gold', 1100);
+      play('chip', { rate: 0.9 });
+      break;
+    case 'shift':
+      await fxFly('weak', ev.from, ev.to, '↓');
+      apply(); fxPop(ev.to, `出目ずらし: ${DIE[ev.id].name}`, 'poison', 1100);
+      break;
+    case 'shifted': apply(); fxPop(ev.to, '↓ 出目ずらし', 'poison'); break;
+    case 'resist': await fxFly('weak', ev.from, ev.to, '➜'); apply(); fxRing(ev.to, 'guard'); fxPop(ev.to, '移動不可!', 'guard'); play('barrier', { gain: 0.5 }); break;
+    case 'immovable': apply(); fxSeat(ev.to, 'guard'); fxPop(ev.to, '⚓ 移動不可', 'guard'); play('barrier', { gain: 0.4, rate: 0.8 }); break;
+    case 'kill':
+      await fxFly('skullfly', ev.from, ev.to, '🗡');
+      apply(); fxSeat(ev.to, 'hurt'); fxRing(ev.to, 'dmg'); fxPop(ev.to, `💥 ${DIE[ev.id].name}を破壊`, 'fire', 1200);
+      play('hit', { gain: 0.9, rate: 0.6 });
+      break;
+    case 'decoy': apply(); fxRing(ev.to, 'gold'); fxPop(ev.to, '🎲 デコイ+1', 'gold'); play('write', { gain: 0.6 }); break;
+    case 'rally': apply(); fxSparkle(ev.to, 'fire', '🔥', 8); fxSeat(ev.to, 'charge'); fxPop(ev.to, '全員の攻撃 強化!', 'fire'); play('turn', { gain: 0.5, rate: 1.3 }); break;
+    case 'reroll': apply(); fxRing(ev.to, 'gold'); fxPop(ev.to, '🎲 振り直し', 'gold'); play('roll', { gain: 0.5 }); break;
     default: apply();
   }
 }
@@ -1258,7 +1435,7 @@ async function playTurn(t) {
   for (const st of T.steps) {
     if (PB.key !== key) return;
     hideBanner();
-    if (st.kind === 'die') { PB.rolls.i = st.i; DGL?.focus(st.i); }
+    if (st.kind === 'die' || st.kind === 'pre') { PB.rolls.i = st.i; DGL?.focus(st.i); }
     else { PB.rolls.i = null; DGL?.focus(null); }
     const prev = PB.snap || initSnap();
     showBanner(T.role, st);
@@ -1491,7 +1668,7 @@ function viewRoom() {
 function dieKnown(id) {
   // 開示なしモードでは、競りが終わったダイスだけ面の効果が見える
   const V = S.V;
-  return V.reveal || !!V.sold[id] || (V.cur?.item === id && V.phase !== 'bid');
+  return isDecoy(id) || id === 'decoy' || V.reveal || !!V.sold[id] || (V.cur?.item === id && V.phase !== 'bid');
 }
 function viewGame() {
   const V = S.V;
@@ -1560,7 +1737,8 @@ function lotCard(id, no) {
   const faces = known ? `<div class="lf">${[1, 2, 3, 4, 5, 6].map(f => `<div><span class="fnum">${f}</span>${esc(faceDesc(id, f))}</div>`).join('')}</div>`
     : '<div class="ef"><span class="hid">面の効果は競りが終わると公開されます</span></div>';
   return `<div class="card lot"><div class="no"><span>${no}</span><span>${esc(d.job)}</span></div>
-    <div class="lothead"><img src="${d.img}" alt=""><div class="nm">${esc(d.name)}<small>のダイス</small></div></div>${faces}</div>`;
+    <div class="lothead"><img src="${d.img}" alt=""><div class="nm">${esc(d.name)}<small>のダイス</small></div></div>${faces}
+    ${known && d.passive ? `<div class="psv">${esc(d.passive)}</div>` : ''}</div>`;
 }
 function bidResultLine(c) {
   if (!c) return '';
@@ -1629,18 +1807,31 @@ function lotResult(c) {
 function viewDice() {
   const V = S.V;
   const rolling = PB.rolls;
+  // ダイスのカード。roll はこの番の出目(借りたダイスは、振っている人の出目を持ち主の欄に出す)
+  const card = (r, id, label, snap) => {
+    const roll = rolling ? rolling.list.find(x => x.id === id) : null;
+    const cur = roll && rolling.list[rolling.i]?.id === id;
+    const tags = [];
+    if (snap?.broken?.includes(id)) tags.push('壊れた');
+    if (snap?.stance?.includes(id)) tags.push('🎯構え');
+    const out = snap?.out?.find(o => o.id === id);
+    if (out) tags.push(out.why === '麻痺' ? '⚡麻痺中' : '押し出し中');
+    if (snap?.lent?.includes(id)) tags.push('🧲奪われ中');
+    if (snap?.shift?.includes(id)) tags.push('↓出目ずらし');
+    const dim = snap?.broken?.includes(id) || out || snap?.lent?.includes(id);
+    const faces = [1, 2, 3, 4, 5, 6].map(f => `<div class="mf ${roll?.face === f ? 'hit' : ''}"><span class="fnum">${f}</span>${dieKnown(id) ? esc(faceShort(id, f)) : '？'}</div>`).join('');
+    return `<div class="dcard ${cur ? 'cur' : ''} ${dim ? 'broken' : ''} ${isDecoy(id) ? 'decoy' : ''}" title="${esc(dieKnown(id) ? dieSummary(id) + (DIE[id].passive ? ' / ' + DIE[id].passive : '') : '')}">
+      <div class="dh"><img src="${DIE[id].img}" alt=""><div><b>${label}</b><small>${esc(DIE[id].job)}${tags.map(t => ' ・ ' + t).join('')}</small></div></div>
+      <div class="mfs">${faces}</div></div>`;
+  };
   const col = r => {
     const snap = PB.snap?.[r];
-    const cards = V.owned[r].map((id, k) => {
-      const roll = rolling && rolling.role === r ? rolling.list.find(x => x.id === id) : null;
-      const cur = roll && rolling.list[rolling.i]?.id === id;
-      const broken = snap?.broken?.includes(id), stance = snap?.stance?.includes(id);
-      const faces = [1, 2, 3, 4, 5, 6].map(f => `<div class="mf ${roll?.face === f ? 'hit' : ''}"><span class="fnum">${f}</span>${dieKnown(id) ? esc(faceShort(id, f)) : '？'}</div>`).join('');
-      return `<div class="dcard ${cur ? 'cur' : ''} ${broken ? 'broken' : ''}" title="${esc(dieKnown(id) ? dieSummary(id) : '')}">
-        <div class="dh"><img src="${DIE[id].img}" alt=""><div><b>${k + 1}. ${esc(DIE[id].name)}</b><small>${esc(DIE[id].job)}${broken ? ' ・ 壊れた' : ''}${stance ? ' ・ 🎯構え' : ''}</small></div></div>
-        <div class="mfs">${faces}</div></div>`;
-    }).join('');
-    return `<div class="die ${cls(r)}"><h4>${who(r)}のダイス ・ ${V.owned[r].length}個</h4><div class="dcards">${cards || '<p class="muted" style="font-size:12px">まだありません</p>'}</div></div>`;
+    const cards = V.owned[r].map((id, k) => card(r, id, `${k + 1}. ${esc(DIE[id].name)}`, snap))
+      .concat((snap?.decoys || []).map(id => card(r, id, esc(DIE[id].name), snap))).join('');
+    const borrowed = (snap?.borrow || []).map(id => DIE[id].name);
+    return `<div class="die ${cls(r)}"><h4>${who(r)}のダイス ・ ${V.owned[r].length}個${snap?.decoys?.length ? ` + デコイ${snap.decoys.length}個` : ''}</h4>
+      ${borrowed.length ? `<div class="muted" style="font-size:12px;margin:-4px 0 6px">🧲 借りている: ${borrowed.map(esc).join('、')}(次の番に振る)</div>` : ''}
+      <div class="dcards">${cards || '<p class="muted" style="font-size:12px">まだありません</p>'}</div></div>`;
   };
   return `<div class="dicep">${col(me())}${col(op())}</div>`;
 }
@@ -1676,11 +1867,19 @@ function viewBattle() {
 function statusRows(s) {
   if (!s) return [];
   const rows = [];
+  const names = ids => ids.map(id => esc(DIE[id].name)).join('、');
   if (s.guard) rows.push(['🛡', `防御 <b>${s.guard}</b>`, '次に受けるダメージをこの分減らす(1回で消える)']);
   if (s.buff) rows.push(['🔥', `次の攻撃 <b>+${s.buff}</b>`, '次に相手へ与えるダメージに足される']);
   if (s.weaken) rows.push(['▼', `次の攻撃 <b>-${s.weaken}</b>`, '次に相手へ与えるダメージが減る']);
   if (s.vuln) rows.push(['◎', `被ダメージ <b>+${s.vuln}</b>`, '次に受けるダメージが増える']);
   if (s.poison) rows.push(['☠', `毒 <b>${s.poison}</b>`, '自分の番の終わりに毎回ダメージ(防御で防げない)']);
+  if (s.stock) rows.push(['💢', `溜め込み <b>${s.stock}</b>`, 'チルチルの次の攻撃に上乗せ']);
+  if (s.immovable) rows.push(['⚓', '移動不可', '相手の次の番まで、ダイスは動かされない']);
+  if (s.decoys?.length) rows.push(['🎲', `デコイ <b>${s.decoys.length}個</b>`, '一緒に振られる(全部の面が10ダメージ)']);
+  for (const o of s.out || []) rows.push([o.why === '麻痺' ? '⚡' : '➜', `${esc(DIE[o.id].name)} ${o.why}`, '次の番は振れない']);
+  if (s.lent?.length) rows.push(['🧲', `${names(s.lent)} 奪われ中`, '相手が次の番に振り、そのあと戻る']);
+  if (s.borrow?.length) rows.push(['🧲', `${names(s.borrow)} を借りている`, '次の自分の番に振る']);
+  if (s.shift?.length) rows.push(['↓', `${names(s.shift)} 出目ずらし`, '次に出る目が1つ下がる']);
   for (const id of s.stance || []) rows.push(['🎯', `${esc(DIE[id].name)} 狙撃の構え`, 'このダイスの攻撃が2倍']);
   for (const id of s.broken || []) rows.push(['💥', `${esc(DIE[id].name)} 壊れた`, 'もう振られない']);
   return rows;
@@ -1699,7 +1898,7 @@ function viewLog() {
   return `<div class="log">${PB.log.map(({ role, round, st }) => {
     const head = st.kind === 'poison' ? `ターン${round} ${who(role)}の番の終わり`
       : st.kind === 'none' ? `ターン${round} ${who(role)}の番`
-      : `ターン${round} ${who(role)}: ${esc(DIE[st.id].name)} ${st.face}の目「${esc(faceShort(st.id, st.face))}」`;
+      : `ターン${round} ${who(role)}: ${esc(DIE[st.id].name)} ${st.face}の目「${esc(faceShort(st.id, st.face))}」${st.kind === 'pre' ? '(番のはじめ)' : ''}`;
     return `<div class="le ${cls(role)}"><div class="h">${head}</div>${st.lines.map(fillNames).join('<br>')}</div>`;
   }).join('')}</div>`;
 }
@@ -1729,7 +1928,7 @@ function toast(msg) {
 }
 
 // ---------------- 能力一覧と数値の調整(ゲーム前にロビー・ルームから開く) ----------------
-const PARAM_LABEL = { dmg: 'ダメージ', self: '自傷', heal: '回復', guard: '防御', poison: '毒', buff: '強化', weaken: '弱体', vuln: '被ダメ+' };
+const PARAM_LABEL = { dmg: 'ダメージ', self: '自傷', heal: '回復', guard: '防御', poison: '毒', buff: '強化', weaken: '弱体', vuln: '被ダメ+', rally: '全攻撃+', healper: '1個につき回復', guardper: '1個につき防御' };
 const dbgEl = document.getElementById('dbg');
 let dbgOpen = false;
 
@@ -1758,8 +1957,8 @@ function renderDbg() {
     const chg = rule[key] !== RULE_BASE[key];
     return `<label class="prm ${chg ? 'chg' : ''}"><span>${esc(RULE_LABEL[key])}</span><input type="number" data-k="rule~${key}" value="${rule[key]}" min="1" step="1">${chg ? `<span class="was">元${RULE_BASE[key]}</span>` : ''}</label>`;
   }).join('');
-  const rows = DICE_POOL.map(d => `<tr data-id="${d.id}"><td class="nm"><img class="av" src="${d.img}" alt=""> ${esc(d.name)}<small>${esc(d.job)}</small></td>
-      <td class="pr">${dbgParams(d)}</td><td class="ds">${dbgDesc(d)}</td></tr>`).join('');
+  const rows = [...DICE_POOL, DECOY_DIE].map(d => `<tr data-id="${d.id}"><td class="nm"><img class="av" src="${d.img}" alt=""> ${esc(d.name)}<small>${esc(d.job)}</small></td>
+      <td class="pr">${dbgParams(d)}</td><td class="ds">${dbgDesc(d)}${d.passive ? `<br><span style="color:var(--gold)">${esc(d.passive)}</span>` : ''}</td></tr>`).join('');
   const n = Object.keys(localTune).length;
   dbgEl.innerHTML = `<div class="box">
     <div class="top"><h3>能力の調整</h3><span class="tag">変更 ${n}件</span><div class="spacer" style="flex:1"></div>
@@ -1768,7 +1967,7 @@ function renderDbg() {
       ${ingame ? '<br><b style="color:var(--gold-hi)">いまの対戦には反映されません。次のゲームから反映されます。</b>' : ''}
       ${ingame && S.pub.start.tune ? `<br>いまの対戦はホストの調整値(${Object.keys(S.pub.start.tune).length}件)で進んでいます。` : ''}</div>
     <div class="rulebox">${ruleRow}</div>
-    <table><tr><th>ダイス(全${DICE_POOL.length}体)</th><th>面ごとの数値</th><th>いまの効果</th></tr>${rows}</table>
+    <table><tr><th>ダイス(全${DICE_POOL.length}体+デコイ)</th><th>面ごとの数値</th><th>いまの効果</th></tr>${rows}</table>
     <textarea id="dbgOut" readonly hidden></textarea></div>`;
   dbgEl.hidden = false;
 }
