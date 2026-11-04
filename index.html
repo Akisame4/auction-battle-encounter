@@ -861,9 +861,13 @@ function runAutoActions() {
   if (V.need?.nonce) {
     // 競りが終わった直後は、少し待ってから次へ進む(開票の結果を見せるため)
     const k = V.need.nonce, wait = V.history.length && (k === 'battle' || /^r\d+$/.test(k)) ? LOT_RESULT_MS : 0;
-    const tk = `${S.g}/${k}`;
+    // 同じタブで別のルームに入るとゲーム番号が重なるので、ルーム番号も含めて区別する。待ち終わったら消す
+    const tk = `${S.code}/${S.g}/${k}`;
     if (!wait) writeSecret(k, randomU32());
-    else if (!nonceTimers[tk]) nonceTimers[tk] = setTimeout(() => { if (S.V?.need?.nonce === k) writeSecret(k, randomU32()); }, wait);
+    else if (!nonceTimers[tk]) nonceTimers[tk] = setTimeout(() => {
+      delete nonceTimers[tk];
+      if (`${S.code}/${S.g}/${S.V?.need?.nonce}` === tk) writeSecret(k, randomU32());
+    }, wait);
   }
   if (V.phase === 'result' && S.role === 'host') maybeStartRematch();
   scheduleAutoRoll();
