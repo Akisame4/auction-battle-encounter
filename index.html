@@ -20,7 +20,7 @@
   --me:#ecd9a0; --op:#e0705e; --ok:#7fc79a; --warn:#e9a74a;
   --ivory:#f4ecd8; --ink:#2a2216;
   --c-atk:#b8382c; --c-sp:#2d8a57; --c-minus:#5b4a7a; --c-face:#c9992f; --c-unk:#5d5a50;
-  --chip1:#e8e3d6; --chip5:#c0392b; --chip10:#2e64b5; --chip25:#1f8a4c; --chipmax:#1d1d1d;
+  --chip1:#e8e3d6; --chip10:#2e64b5; --chip50:#c0392b; --chip100:#1f8a4c; --chipmax:#1d1d1d;
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;color:var(--text);font-family:var(--font);font-weight:600;font-size:15px;
@@ -100,7 +100,7 @@ h3{margin:0 0 10px;font-size:13px;color:var(--sub);letter-spacing:.16em;font-wei
 .chip span{position:relative;text-shadow:0 1px 2px rgba(0,0,0,.7)}
 button.chip:hover:not(:disabled){transform:translateY(-3px)} button.chip{transition:transform .12s}
 .k1{--c:var(--chip1)} .k1 span{color:#2a2216;text-shadow:none} .k1::before{border-color:rgba(0,0,0,.25)}
-.k5{--c:var(--chip5)} .k10{--c:var(--chip10)} .k25{--c:var(--chip25)} .kmax{--c:var(--chipmax)} .kmax span{font-size:13px}
+.k10{--c:var(--chip10)} .k50{--c:var(--chip50)} .k100{--c:var(--chip100)} .k100 span{font-size:15px} .kmax{--c:var(--chipmax)} .kmax span{font-size:13px}
 .chip.sm{width:44px;height:44px;font-size:13px} .chip.sm::before{inset:6px}
 .chip.down{--c:#555;background:repeating-conic-gradient(#555 0 20deg,#999 20deg 30deg)} .chip.down::before{background:#3a3a3a}
 .flychip{position:fixed;z-index:50;pointer-events:none;transition:transform .42s cubic-bezier(.3,.7,.3,1),opacity .42s}
@@ -306,10 +306,10 @@ button.chip:hover:not(:disabled){transform:translateY(-3px)} button.chip{transit
 // =====================================================================
 // 調整値(数値はすべて仮。バランス調整はここと能力定義テーブルで行う)
 // =====================================================================
-const START_POINTS = 100;      // 初期ポイント
-const BID_MAX = 99;            // 入札の上限
+const START_POINTS = 1000;     // 初期チップ
+const BID_MAX = 999;           // 入札の上限
 const DICE_COUNT = 10;         // 1ゲームで競りに出すダイスの数(24体から抽選)
-const LIFE_PER_CHIP = 10;      // バトルのライフ = 残りチップ×この数(調整パネルで変えられる)
+const LIFE_PER_CHIP = 1;       // バトルのライフ = 残りチップ×この数(調整パネルで変えられる)
 const FACES = 6;               // ダイスの面数
 const TURN_LIMIT = 50;         // このターン数で決着しなければ残りライフが多い方の勝ち(1ターン=両者が1回ずつ振る)
 const SHOW_TIE_AMOUNT = true;  // 同額だったとき、再入札の前にその金額を見せる
@@ -1385,7 +1385,7 @@ function header(extra = '') {
 }
 
 // ---- チップ ----
-const DENOMS = [25, 10, 5, 1];
+const DENOMS = [100, 50, 10, 1];
 function breakdown(n, denoms = DENOMS) {
   const out = [];
   for (const d of denoms) { const k = Math.floor(n / d); if (k) out.push([d, k]); n -= k * d; }
@@ -1412,7 +1412,7 @@ function pileHtml(n, w = 170, h = 118, size = 52) {
 function stacksHtml(n) {
   n = Math.max(0, n);
   let html = '';
-  for (const [d, k] of breakdown(n, [10, 5, 1])) {
+  for (const [d, k] of breakdown(n)) {
     for (let left = k; left > 0; left -= 5) {
       html += `<div class="stack">${Array.from({ length: Math.min(5, left) }, () => `<i style="background:var(--chip${d})"></i>`).join('')}</div>`;
     }
@@ -1428,20 +1428,22 @@ function viewNoConfig() {
     <p class="muted">開発用: Firebase エミュレータを起動して <code>?emu</code> をつけて開くと、ローカルで遊べます。</p></div>`;
 }
 
+// 「残ったチップがライフ」の説明(倍率が1以外のときだけ倍率を書く)
+const lifeRule = () => RULE.life === 1 ? '残ったチップがそのままバトルのライフ' : `残ったチップ×${RULE.life}がバトルのライフ`;
 function rulesText() {
   return `<div class="rules-text">
   <b>遊び方</b><br>
   ・2人とも${START_POINTS}枚のチップを持ってスタート。24体の中から選ばれた${DICE_COUNT}個のダイスが、1個ずつ競りに出ます(順番は出るまで分かりません)<br>
   ・ダイスは1〜6の面の効果が初めから決まっています<br>
   ・チップは同時に伏せて賭けます。多く賭けたほうが落札してチップを支払います。<b>2人とも0枚ならそのダイスは流れます</b>。同額なら1回だけ賭け直し、また同額ならランダムで決まります<br>
-  ・<b>残ったチップ×${RULE.life}がライフ</b>になります。自分の番には、持っているダイスを<b>全部同時に</b>振り、落札した順に効果が出ます。先攻はチップが少ない人です</div>`;
+  ・<b>${lifeRule()}</b>になります。自分の番には、持っているダイスを<b>全部同時に</b>振り、落札した順に効果が出ます。先攻はチップが少ない人です</div>`;
 }
 
 function viewLobby() {
   const nm = lsGet(NAME_KEY) || '';
   return `<div class="lobby">
     <div class="hero"><span class="logo">DICE AUCTION</span><div class="sub">ダイスオークション(仮)</div>
-      <div class="chips">${chipHtml(1)}${chipHtml(5)}${chipHtml(10)}${chipHtml(25)}</div></div>
+      <div class="chips">${chipHtml(1)}${chipHtml(10)}${chipHtml(50)}${chipHtml(100)}</div></div>
     <div class="panel"><h2>名前(任意)</h2><input id="nameInput" maxlength="12" placeholder="12文字まで" value="${esc(nm)}" style="width:100%"></div>
     <div class="panel"><h2>テーブルを用意する</h2><p class="muted" style="margin:0 0 12px;font-size:13px">4桁のルーム番号が発行されます。相手に伝えてください。</p>
       <button class="btn" data-act="create" style="width:100%">ルームを作る</button></div>
@@ -1519,7 +1521,7 @@ function viewSeat(r) {
   const turn = !!turnT && turnT.role === r;
   return `<div class="panel seat ${cls(r)} ${turn ? 'turn' : ''}" id="seat-${cls(r)}">
     <div class="who">${who(r)}${turn ? ' ・ 手番' : ''}</div><div class="nm">${esc(nameOf(r))}</div>
-    <div class="life">${Math.max(0, life)}</div><div class="lbl">${inBattle ? 'LIFE' : `CHIPS ・ LIFE = ×${RULE.life}`}</div>
+    <div class="life">${Math.max(0, life)}</div><div class="lbl">${inBattle ? 'LIFE' : (RULE.life === 1 ? 'CHIPS = LIFE' : `CHIPS ・ LIFE = ×${RULE.life}`)}</div>
     ${stacksHtml(inBattle ? Math.ceil(Math.max(0, life) / RULE.life) : life)}
     <div class="badges">${badges.map(x => `<span>${x}</span>`).join('')}</div>
     ${inBattle ? viewStatus(r) : ''}
@@ -1549,7 +1551,7 @@ function viewLast() {
     body = `<h3>前回の結果</h3><div style="font-size:13px;line-height:1.8">${esc(DIE[last.item].name)}のダイス<br>${bidResultLine(last)}
       ${last.unsold ? '→ 2人とも0枚なので<b>流れた</b>' : ''}</div>`;
   } else {
-    body = `<h3>このテーブルのルール</h3><div class="rules-text">賭けたチップは落札したときだけ支払います。残ったチップ×${RULE.life}がバトルのライフになります。所持チップは必ず1枚残ります。</div>`;
+    body = `<h3>このテーブルのルール</h3><div class="rules-text">賭けたチップは落札したときだけ支払います。${lifeRule()}になります。所持チップは必ず1枚残ります。</div>`;
   }
   return `<div class="panel">${body}</div>`;
 }
@@ -1595,7 +1597,7 @@ function viewStage() {
     } else {
       const v = S.bidDraft, over = v !== '' && Number(v) > max;
       tray = `<div class="tray">
-          ${[1, 5, 10, 25].map(d => `<button class="chip k${d}" data-act="chip" data-v="${d}" ${amount + d > max ? 'disabled' : ''} aria-label="${d}枚賭ける"><span>${d}</span></button>`).join('')}
+          ${[1, 10, 50, 100].map(d => `<button class="chip k${d}" data-act="chip" data-v="${d}" ${amount + d > max ? 'disabled' : ''} aria-label="${d}枚賭ける"><span>${d}</span></button>`).join('')}
           <button class="chip kmax" data-act="chip" data-v="max" aria-label="上限まで賭ける"><span>MAX</span></button>
           <input id="bidInput" class="direct" type="number" inputmode="numeric" min="0" max="${max}" step="1" value="${esc(v)}" placeholder="0" aria-label="賭ける枚数">
           <button class="ghost" data-act="chipreset">戻す</button>
