@@ -356,8 +356,7 @@ const IMMOVABLE = { op: 'immovable' }, REROLL = { op: 'reroll' };
 const DICE_POOL = [
   { id: 'olive',     name: 'オリーブ', job: 'ファイター',     f: { 1: [MISS], 2: [MISS], 3: [A(80)], 4: [A(80)], 5: [A(120)], 6: [A(120)] } },
   { id: 'fang',      name: 'ファング', job: 'バーサーカー',   f: { 1: [MISS], 2: [A(60), SELF(20)], 3: [A(80), SELF(20)], 4: [A(100), SELF(40)], 5: [A(120), SELF(60)], 6: [A(140), SELF(80)] } },
-  { id: 'chilchil',  name: 'チルチル', job: 'グラップラー',   f: { 1: [A(40)], 2: [A(40), PUSH1], 3: [A(60)], 4: [A(60), PUSH1], 5: [A(80)], 6: [A(80), PUSH1] },
-    passive: '溜め込み: 持ち主が受けたダメージを溜めて、チルチルの次の攻撃に上乗せする' },
+  { id: 'chilchil',  name: 'チルチル', job: 'グラップラー',   f: { 1: [A(40)], 2: [A(40), PUSH1], 3: [A(60)], 4: [A(60), PUSH1], 5: [A(80)], 6: [A(80), PUSH1] } },
   { id: 'godo',      name: 'ゴドー',   job: 'ソルジャー',     f: { 1: [A(20)], 2: [A(40), IMMOVABLE], 3: [A(40)], 4: [A(60), IMMOVABLE], 5: [A(60)], 6: [A(80), IMMOVABLE] } },
   { id: 'lunaluna',  name: 'ルナルナ', job: 'ウォリアー',     f: { 1: [A(20)], 2: [A(20), GUARD(20)], 3: [A(40)], 4: [A(40), GUARD(20)], 5: [A(60)], 6: [A(60), GUARD(20)] } },
   { id: 'dragon',    name: 'ドラゴン', job: 'ブラッドナイト', f: { 1: [A(20), HEAL(20)], 2: [A(20), HEAL(20)], 3: [A(20), HEAL(20)], 4: [A(40), HEAL(20)], 5: [A(40), HEAL(20)], 6: [A(60), HEAL(20)] } },
@@ -593,7 +592,7 @@ function simulate(owned, life, rng) {
   const P = {};
   for (const r of ['host', 'guest']) P[r] = {
     life: life[r], max: life[r], guard: 0, buff: 0, weaken: 0, vuln: 0, poison: 0, broken: [], stance: [],
-    decoys: [], out: [], lent: [], borrow: [], borrowNext: [], shift: [], immovable: false, stock: 0,
+    decoys: [], out: [], lent: [], borrow: [], borrowNext: [], shift: [], immovable: false,
   };
   const tied = life.host === life.guest;
   const first = tied ? (rng() < 0.5 ? 'host' : 'guest') : (life.host < life.guest ? 'host' : 'guest');
@@ -606,7 +605,7 @@ function simulate(owned, life, rng) {
     for (const r in P) {
       const X = P[r];
       s[r] = { life: X.life, guard: X.guard, buff: X.buff, weaken: X.weaken, vuln: X.vuln, poison: X.poison, broken: [...X.broken], stance: [...X.stance],
-        decoys: [...X.decoys], out: X.out.map(o => ({ ...o })), lent: [...X.lent], borrow: [...X.borrow, ...X.borrowNext], shift: [...X.shift], immovable: X.immovable, stock: X.stock };
+        decoys: [...X.decoys], out: X.out.map(o => ({ ...o })), lent: [...X.lent], borrow: [...X.borrow, ...X.borrowNext], shift: [...X.shift], immovable: X.immovable };
     }
     return s;
   };
@@ -622,11 +621,8 @@ function simulate(owned, life, rng) {
   const nm = id => DIE[id].name;
   // そのダイスの持ち主(デコイは作った人、借りているダイスは貸した人)
   const ownerOf = id => (owned.host.includes(id) || P.host.decoys.includes(id)) ? 'host' : 'guest';
-  // ライフを減らす。チルチルを持っていれば、受けたダメージを溜める
-  const hurt = (r, n) => {
-    P[r].life -= n;
-    if (n > 0 && owned[r].includes('chilchil') && !P[r].broken.includes('chilchil')) P[r].stock += n;
-  };
+  // ライフを減らす
+  const hurt = (r, n) => { P[r].life -= n; };
   // 相手が持っているダイスの数(範囲攻撃の当たる回数。壊れたものは数えない)
   const diceCount = r => owned[r].filter(id => !P[r].broken.includes(id)).length + P[r].decoys.length;
   // 動かす効果の対象になる相手のダイス(壊れた・すでに押し出し/奪われ中のものは除く)
@@ -637,7 +633,6 @@ function simulate(owned, life, rng) {
     let n = f.n;
     const notes = [];
     if (f.snipe && A.stance.includes(id)) { n *= 2; notes.push('狙撃の構えで2倍'); }
-    if (id === 'chilchil' && A.stock) { n += A.stock; notes.push(`溜め込み+${A.stock}`); A.stock = 0; }
     if (ctx.rally) { n += ctx.rally; notes.push(`全攻撃+${ctx.rally}`); }
     if (A.weaken) { n = Math.max(0, n - A.weaken); notes.push(`弱体-${A.weaken}`); A.weaken = 0; }
     if (A.buff) { n += A.buff; notes.push(`強化+${A.buff}`); A.buff = 0; }
@@ -1875,7 +1870,6 @@ function statusRows(s) {
   if (s.weaken) rows.push(['▼', `次の攻撃 <b>-${s.weaken}</b>`, '次に相手へ与えるダメージが減る']);
   if (s.vuln) rows.push(['◎', `被ダメージ <b>+${s.vuln}</b>`, '次に受けるダメージが増える']);
   if (s.poison) rows.push(['☠', `毒 <b>${s.poison}</b>`, '自分の番の終わりに毎回ダメージ(防御で防げない)']);
-  if (s.stock) rows.push(['💢', `溜め込み <b>${s.stock}</b>`, 'チルチルの次の攻撃に上乗せ']);
   if (s.immovable) rows.push(['⚓', '移動不可', '相手の次の番まで、ダイスは動かされない']);
   if (s.decoys?.length) rows.push(['🎲', `デコイ <b>${s.decoys.length}個</b>`, '一緒に振られる(全部の面が10ダメージ)']);
   for (const o of s.out || []) rows.push([o.why === '麻痺' ? '⚡' : '➜', `${esc(DIE[o.id].name)} ${o.why}`, '次の番は振れない']);
