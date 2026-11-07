@@ -20,7 +20,7 @@
   --me:#ecd9a0; --op:#e0705e; --ok:#7fc79a; --warn:#e9a74a;
   --ivory:#f4ecd8; --ink:#2a2216;
   --c-atk:#b8382c; --c-sp:#2d8a57; --c-minus:#5b4a7a; --c-face:#c9992f; --c-unk:#5d5a50;
-  --chip1:#e8e3d6; --chip10:#2e64b5; --chip50:#c0392b; --chip100:#1f8a4c; --chipmax:#1d1d1d;
+  --chip1:#e8e3d6; --chip10:#2e64b5; --chip100:#1f8a4c; --chip500:#c0392b; --chip1000:#6a3fa0; --chipmax:#1d1d1d;
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;color:var(--text);font-family:var(--font);font-weight:600;font-size:15px;
@@ -102,7 +102,7 @@ h3{margin:0 0 10px;font-size:13px;color:var(--sub);letter-spacing:.16em;font-wei
 .chip span{position:relative;text-shadow:0 1px 2px rgba(0,0,0,.7)}
 button.chip:hover:not(:disabled){transform:translateY(-3px)} button.chip{transition:transform .12s}
 .k1{--c:var(--chip1)} .k1 span{color:#2a2216;text-shadow:none} .k1::before{border-color:rgba(0,0,0,.25)}
-.k10{--c:var(--chip10)} .k50{--c:var(--chip50)} .k100{--c:var(--chip100)} .k100 span{font-size:15px} .kmax{--c:var(--chipmax)} .kmax span{font-size:13px}
+.k10{--c:var(--chip10)} .k100{--c:var(--chip100)} .k500{--c:var(--chip500)} .k1000{--c:var(--chip1000)} .k100 span,.k500 span{font-size:15px} .k1000 span{font-size:12px;letter-spacing:0} .kmax{--c:var(--chipmax)} .kmax span{font-size:13px}
 .chip.sm{width:44px;height:44px;font-size:13px} .chip.sm::before{inset:6px}
 .chip.down{--c:#555;background:repeating-conic-gradient(#555 0 20deg,#999 20deg 30deg)} .chip.down::before{background:#3a3a3a}
 .flychip{position:fixed;z-index:50;pointer-events:none;transition:transform .42s cubic-bezier(.3,.7,.3,1),opacity .42s}
@@ -310,8 +310,8 @@ button.chip:hover:not(:disabled){transform:translateY(-3px)} button.chip{transit
 // =====================================================================
 // 調整値(数値はすべて仮。バランス調整はここと能力定義テーブルで行う)
 // =====================================================================
-const START_POINTS = 1000;     // 初期チップ
-const BID_MAX = 999;           // 入札の上限
+const START_POINTS = 10000;    // 初期チップ
+const BID_MAX = 9999;          // 入札の上限
 const DICE_COUNT = 10;         // 1ゲームで競りに出すダイスの数(24体から抽選)
 const LIFE_PER_CHIP = 1;       // バトルのライフ = 残りチップ×この数(調整パネルで変えられる)
 const FACES = 6;               // ダイスの面数
@@ -1564,7 +1564,7 @@ function header(extra = '') {
 }
 
 // ---- チップ ----
-const DENOMS = [100, 50, 10, 1];
+const DENOMS = [1000, 500, 100, 10, 1]; // 表示用(端数は1枚チップで出す)
 function breakdown(n, denoms = DENOMS) {
   const out = [];
   for (const d of denoms) { const k = Math.floor(n / d); if (k) out.push([d, k]); n -= k * d; }
@@ -1622,7 +1622,7 @@ function viewLobby() {
   const nm = lsGet(NAME_KEY) || '';
   return `<div class="lobby">
     <div class="hero"><span class="logo">AUCTION BATTLE<br>ENCOUNTER</span><div class="sub">オークション・バトル・エンカウンター</div>
-      <div class="chips">${chipHtml(1)}${chipHtml(10)}${chipHtml(50)}${chipHtml(100)}</div></div>
+      <div class="chips">${chipHtml(10)}${chipHtml(100)}${chipHtml(500)}${chipHtml(1000)}</div></div>
     <div class="panel"><h2>名前(任意)</h2><input id="nameInput" maxlength="12" placeholder="12文字まで" value="${esc(nm)}" style="width:100%"></div>
     <div class="panel"><h2>テーブルを用意する</h2><p class="muted" style="margin:0 0 12px;font-size:13px">4桁のルーム番号が発行されます。相手に伝えてください。</p>
       <button class="btn" data-act="create" style="width:100%">ルームを作る</button></div>
@@ -1777,7 +1777,7 @@ function viewStage() {
     } else {
       const v = S.bidDraft, over = v !== '' && Number(v) > max;
       tray = `<div class="tray">
-          ${[1, 10, 50, 100].map(d => `<button class="chip k${d}" data-act="chip" data-v="${d}" ${amount + d > max ? 'disabled' : ''} aria-label="${d}枚賭ける"><span>${d}</span></button>`).join('')}
+          ${[10, 100, 500, 1000].map(d => `<button class="chip k${d}" data-act="chip" data-v="${d}" ${amount + d > max ? 'disabled' : ''} aria-label="${d}枚賭ける"><span>${d}</span></button>`).join('')}
           <button class="chip kmax" data-act="chip" data-v="max" aria-label="上限まで賭ける"><span>MAX</span></button>
           <input id="bidInput" class="direct" type="number" inputmode="numeric" min="0" max="${max}" step="1" value="${esc(v)}" placeholder="0" aria-label="賭ける枚数">
           <button class="ghost" data-act="chipreset">戻す</button>
