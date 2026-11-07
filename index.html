@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ダイスオークション(仮)</title>
+<title>Auction Battle Encounter</title>
 <meta name="description" content="キャラクターのダイスを1個ずつ競り落とし、手に入れたダイスを全部同時に振って戦う2人対戦のブラウザゲーム">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='6' width='52' height='52' rx='12' fill='%23f2c14e'/%3E%3Ccircle cx='20' cy='20' r='5' fill='%23141824'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23141824'/%3E%3Ccircle cx='44' cy='44' r='5' fill='%23141824'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -49,7 +49,8 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .tag{font-size:12px;color:var(--sub);border:1px solid var(--line);padding:3px 12px;border-radius:999px}
 .tag.warn{color:var(--warn);border-color:var(--warn)}
 .spacer{flex:1}
-@media (max-width:560px){ header .logo{font-size:19px} header .logo small{display:none} .table{padding:16px 12px 18px;border-width:7px;border-radius:30px} .card{width:140px;min-height:190px} }
+@media (max-width:1000px){ header .logo small{display:none} }
+@media (max-width:560px){ header .logo{font-size:19px} header .logo small{display:none} header .logo .full{display:none} header .logo .short{display:inline} .table{padding:16px 12px 18px;border-width:7px;border-radius:30px} .card{width:140px;min-height:190px} }
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.4),0 8px 30px rgba(0,0,0,.45)}
 h3{margin:0 0 10px;font-size:13px;color:var(--sub);letter-spacing:.16em;font-weight:600}
 .wait{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--sub)}
@@ -60,7 +61,8 @@ h3{margin:0 0 10px;font-size:13px;color:var(--sub);letter-spacing:.16em;font-wei
 /* lobby */
 .lobby{max-width:520px;margin:20px auto;display:grid;gap:14px}
 .hero{text-align:center;padding:18px 0 4px}
-.hero .logo{font-size:44px;display:block}
+.hero .logo{font-size:clamp(20px,6vw,44px);display:block;line-height:1.15}
+.logo .short{display:none}
 .hero .sub{color:var(--sub);letter-spacing:.3em;font-size:13px;margin-top:4px}
 .hero .chips{display:flex;justify-content:center;gap:10px;margin-top:16px}
 .lobby h2{margin:0 0 8px;font-size:15px;color:var(--gold);letter-spacing:.1em}
@@ -1557,7 +1559,7 @@ function patch(el, html) {
 
 function header(extra = '') {
   const tuned = S.screen === 'game' && S.pub?.start?.tune ? '<span class="tag" title="ホストが調整した能力の数値で対戦中">調整値あり</span>' : '';
-  return `<header><div class="logo">DICE AUCTION<small>ダイスオークション(仮)</small></div>${extra}${tuned}<div class="spacer"></div>
+  return `<header><div class="logo"><span class="full">AUCTION BATTLE ENCOUNTER</span><span class="short">ABE</span><small>オークション・バトル・エンカウンター</small></div>${extra}${tuned}<div class="spacer"></div>
     ${S.code ? `<span class="tag">ROOM ${esc(S.code)}</span><button class="ghost" data-act="leave">退出</button>` : ''}</header>`;
 }
 
@@ -1619,7 +1621,7 @@ function rulesText() {
 function viewLobby() {
   const nm = lsGet(NAME_KEY) || '';
   return `<div class="lobby">
-    <div class="hero"><span class="logo">DICE AUCTION</span><div class="sub">ダイスオークション(仮)</div>
+    <div class="hero"><span class="logo">AUCTION BATTLE<br>ENCOUNTER</span><div class="sub">オークション・バトル・エンカウンター</div>
       <div class="chips">${chipHtml(1)}${chipHtml(10)}${chipHtml(50)}${chipHtml(100)}</div></div>
     <div class="panel"><h2>名前(任意)</h2><input id="nameInput" maxlength="12" placeholder="12文字まで" value="${esc(nm)}" style="width:100%"></div>
     <div class="panel"><h2>テーブルを用意する</h2><p class="muted" style="margin:0 0 12px;font-size:13px">4桁のルーム番号が発行されます。相手に伝えてください。</p>
