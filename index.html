@@ -346,7 +346,7 @@ const ROOM_CLEANUP_MS = 12 * 3600 * 1000; // この時間より前に作られ�
 // f[面] は効果のリスト。説明文は効果から自動で作るので、数値だけ書き換えれば表示も変わる。
 const A = n => ({ op: 'dmg', n }), AP = n => ({ op: 'dmg', n, pierce: true }), AS = n => ({ op: 'dmg', n, snipe: true });
 // 範囲攻撃: row = 相手のダイスの数だけ(最大3回) / all = 相手のダイスの数だけ / two = 相手のダイスが2個以上なら2回
-const AROW = n => ({ op: 'dmg', n, area: 'row' }), AALL = n => ({ op: 'dmg', n, area: 'all' }), ATWO = (n, pierce) => ({ op: 'dmg', n, area: 'two', ...(pierce ? { pierce } : {}) });
+const AROW = n => ({ op: 'dmg', n, area: 'row' }), AMINE = n => ({ op: 'dmg', n, area: 'mine' }), AALL = n => ({ op: 'dmg', n, area: 'all' }), ATWO = (n, pierce) => ({ op: 'dmg', n, area: 'two', ...(pierce ? { pierce } : {}) });
 const SELF = n => ({ op: 'self', n }), HEAL = n => ({ op: 'heal', n }), GUARD = n => ({ op: 'guard', n });
 const POISON = n => ({ op: 'poison', n }), WEAK = n => ({ op: 'weaken', n }), VULN = n => ({ op: 'vuln', n });
 const RALLY = n => ({ op: 'rally', n }), HEALPER = n => ({ op: 'healper', n }), GUARDPER = n => ({ op: 'guardper', n });
@@ -363,7 +363,7 @@ const DICE_POOL = [
   { id: 'jay',       name: 'ジェイ',   job: 'アサシン',       f: { 1: [BREAK], 2: [SELF(60)], 3: [AP(60)], 4: [AP(60)], 5: [KILL], 6: [KILL] } },
   { id: 'chaco',     name: 'チャコ',   job: 'ガーディアン',   f: { 1: [A(40)], 2: [A(40)], 3: [GUARD(20)], 4: [GUARD(40)], 5: [GUARD(60)], 6: [GUARDPER(10)] } },
   { id: 'rock',      name: 'ロック',   job: 'エンジニア',     f: { 1: [A(40)], 2: [A(40)], 3: [GUARD(20)], 4: [GUARD(20)], 5: [DECOY], 6: [DECOY] } },
-  { id: 'shinonome', name: 'シノノメ', job: '炎メイジ',       f: { 1: [A(30)], 2: [A(50)], 3: [AROW(30)], 4: [AROW(30)], 5: [AROW(50)], 6: [AROW(50)] } },
+  { id: 'shinonome', name: 'シノノメ', job: '炎メイジ',       f: { 1: [A(30)], 2: [A(50)], 3: [AMINE(30)], 4: [AMINE(30)], 5: [AMINE(50)], 6: [AMINE(50)] } },
   { id: 'indra',     name: 'インドラ', job: '雷メイジ',       f: { 1: [A(30)], 2: [A(50)], 3: [AROW(30)], 4: [AROW(30)], 5: [AROW(50), PARALYZE], 6: [AROW(50), PARALYZE] } },
   { id: 'ruma',      name: 'ルマ',     job: 'デモニスト',     f: { 1: [SELF(60)], 2: [SELF(60)], 3: [AALL(20), SELF(20)], 4: [AALL(40), SELF(40)], 5: [AALL(60), SELF(60)], 6: [AALL(80), SELF(80)] } },
   { id: 'teruru',    name: 'テルル',   job: 'スナイパー',     f: { 1: [STANCE], 2: [STANCE], 3: [AS(20)], 4: [AS(40)], 5: [AS(60)], 6: [AS(80)] } },
@@ -434,7 +434,7 @@ function applyTune(tune) {
 // 説明文(長い方は一覧・技名の札、短い方はダイスの面と小さな表示)
 const FX_TEXT = {
   dmg: f => `相手に${f.pierce ? '防御貫通' : ''}${f.n}ダメージ` + (f.snipe ? '(狙撃の構えなら2倍)' : '')
-    + (f.area === 'row' ? '×相手のダイスの数(最大3回)' : f.area === 'all' ? '×相手のダイスの数' : f.area === 'two' ? '(相手のダイスが2個以上なら2回)' : ''),
+    + (f.area === 'row' ? '×相手のダイスの数(最大3回)' : f.area === 'mine' ? '×自分のダイスの数' : f.area === 'all' ? '×相手のダイスの数' : f.area === 'two' ? '(相手のダイスが2個以上なら2回)' : ''),
   rally: f => `この番の自分の攻撃すべて+${f.n}(先に効果を出すダイスにも効く)`,
   healper: f => `自分のダイス1個につき${f.n}回復`,
   guardper: f => `自分のダイス1個につき防御${f.n}`,
@@ -459,7 +459,7 @@ const FX_TEXT = {
   stance: () => '狙撃の構え(このダイスの攻撃が以後2倍)',
 };
 const FX_SHORT = {
-  dmg: f => `${f.pierce ? '貫通' : ''}${f.n}ダメ` + (f.snipe ? '(構え×2)' : '') + (f.area === 'row' ? '×数(最大3)' : f.area === 'all' ? '×数' : f.area === 'two' ? '×2' : ''),
+  dmg: f => `${f.pierce ? '貫通' : ''}${f.n}ダメ` + (f.snipe ? '(構え×2)' : '') + (f.area === 'row' ? '×数(最大3)' : f.area === 'mine' ? '×自分の数' : f.area === 'all' ? '×数' : f.area === 'two' ? '×2' : ''),
   rally: f => `全攻撃+${f.n}`,
   healper: f => `回復${f.n}×数`,
   guardper: f => `防御${f.n}×数`,
@@ -662,6 +662,13 @@ function simulate(owned, life, rng) {
     for (const f of DIE[id].f[face]) {
       switch (f.op) {
         case 'dmg': {
+          if (f.area === 'mine') {
+            // 自分のダイスの数(この番に振った数)だけ当たる。上限なし
+            const hits = Math.max(1, ctx.count);
+            if (hits > 1) { L.push(`${R(me)}のダイス${ctx.count}個ぶん、${hits}回当たる`); E(L, { t: 'area', from: me, to: op, hits }); }
+            for (let h = 0; h < hits; h++) attack(me, f, id, L, ctx);
+            break;
+          }
           const c = diceCount(op);
           const hits = f.area === 'row' ? Math.max(1, Math.min(3, c)) : f.area === 'all' ? Math.max(1, c) : f.area === 'two' && c >= 2 ? 2 : 1;
           if (hits > 1) { L.push(`${R(op)}のダイス${c}個に${hits}回当たる`); E(L, { t: 'area', from: me, to: op, hits }); }
